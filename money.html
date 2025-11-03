@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monthly Expense Tracker</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+
+        /* Simple Month Navigation */
+        .month-navigation {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 30px;
+            padding: 20px;
+        }
+
+        .month-arrow {
+            background: none;
+            border: none;
+            font-size: 2em;
+            color: #667eea;
+            cursor: pointer;
+            padding: 10px 20px;
+            transition: all 0.3s ease;
+            border-radius: 10px;
+        }
+
+        .month-arrow:hover {
+            background: #f0f0f0;
+            transform: scale(1.1);
+        }
+
+        .month-display {
+            font-size: 2em;
+            font-weight: bold;
+            color: #333;
+            min-width: 250px;
+            text-align: center;
+        }
+
+        .form-section {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #333;
+            font-weight: 600;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        button {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .stats-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 25px;
+            border-radius: 15px;
+            color: white;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .stat-card h3 {
+            font-size: 1.2em;
+            margin-bottom: 10px;
+            opacity: 0.9;
+        }
+
+        .stat-card .amount {
+            font-size: 2.5em;
+            font-weight: bold;
+        }
+
+        .expenses-table {
+            overflow-x: auto;
+            margin-bottom: 30px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        thead {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        th, td {
+            padding: 15px;
+            text-align: left;
+        }
+
+        tbody tr {
+            border-bottom: 1px solid #eee;
+            transition: background 0.2s ease;
+        }
+
+        tbody tr:hover {
+            background: #f8f9fa;
+        }
+
+        .delete-btn {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s ease;
+        }
+
+        .delete-btn:hover {
+            background: #c0392b;
+        }
+
+        .member-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        .member-card {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+        }
+
+        .member-card h4 {
+            font-size: 1em;
+            margin-bottom: 5px;
+        }
+
+        .member-card .member-amount {
+            font-size: 1.8em;
+            font-weight: bold;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+            font-size: 1.2em;
+        }
+
+        .status-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            border-radius: 20px;
+            background: #27ae60;
+            color: white;
+            font-weight: bold;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 1.8em;
+            }
+
+            .form-group {
+                grid-template-columns: 1fr;
+            }
+
+            table {
+                font-size: 14px;
+            }
+
+            th, td {
+                padding: 10px;
+            }
+
+            .month-display {
+                font-size: 1.5em;
+                min-width: 180px;
+            }
+
+            .month-arrow {
+                font-size: 1.5em;
+                padding: 5px 15px;
+            }
+
+            .month-navigation {
+                gap: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="status-indicator" id="statusIndicator">🔄 Connecting...</div>
+
+    <div class="container">
+        <h1>💰 Monthly Expense Tracker</h1>
+        <p class="subtitle">Track your room expenses efficiently - Real-time sync enabled</p>
+
+        <!-- Simple Month Navigation -->
+        <div class="month-navigation">
+            <button class="month-arrow" onclick="previousMonth()">◀</button>
+            <div class="month-display" id="monthDisplay">November 2025</div>
+            <button class="month-arrow" onclick="nextMonth()">▶</button>
+        </div>
+
+        <!-- Add Money Form -->
+        <div class="form-section">
+            <h2 style="margin-bottom: 20px; color: #333;">Add Money Contribution</h2>
+            <form id="expenseForm">
+                <div class="form-group">
+                    <div>
+                        <label for="member">Select Member</label>
+                        <select id="member" required>
+                            <option value="">Choose a member...</option>
+                            <option value="SUMIT KUMAR">SUMIT KUMAR</option>
+                            <option value="SANJIT KUMAR">SANJIT KUMAR</option>
+                            <option value="PREM KUMAR">PREM KUMAR</option>
+                            <option value="KESHAV KUMAR">KESHAV KUMAR</option>
+                            <option value="UTTAM KUMAR">UTTAM KUMAR</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="amount">Amount (₹)</label>
+                        <input type="number" id="amount" placeholder="Enter amount" min="1" required>
+                    </div>
+                    <div>
+                        <label for="date">Date</label>
+                        <input type="date" id="date" required>
+                    </div>
+                </div>
+                <button type="submit">Add Contribution</button>
+            </form>
+        </div>
+
+        <!-- Statistics Section -->
+        <div class="stats-section">
+            <div class="stat-card">
+                <h3>Total Money This Month</h3>
+                <div class="amount">₹<span id="totalMonth">0</span></div>
+            </div>
+            <div class="stat-card">
+                <h3>Total Contributions</h3>
+                <div class="amount"><span id="totalContributions">0</span></div>
+            </div>
+        </div>
+
+        <!-- Member-wise Statistics -->
+        <h2 style="margin-bottom: 15px; color: #333;">Member Contributions</h2>
+        <div class="member-stats" id="memberStats"></div>
+
+        <!-- Expenses Table -->
+        <h2 style="margin-top: 40px; margin-bottom: 15px; color: #333;">All Contributions</h2>
+        <div class="expenses-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Member Name</th>
+                        <th>Amount</th>
+                        <th>Date</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="expenseList">
+                    <tr>
+                        <td colspan="5" class="no-data">Loading expenses...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.5.0/firebase-app.js';
+        import { getDatabase, ref, push, onValue, remove } from 'https://www.gstatic.com/firebasejs/12.5.0/firebase-database.js';
+
+        // Your Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyDFSEGrfr9RsXAdgiKI59iLZf3b0-VL7i8",
+            authDomain: "money-e6219.firebaseapp.com",
+            databaseURL: "https://money-e6219-default-rtdb.firebaseio.com",
+            projectId: "money-e6219",
+            storageBucket: "money-e6219.firebasestorage.app",
+            messagingSenderId: "740961698279",
+            appId: "1:740961698279:web:20c8ff8d23afbb04a1fd42"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+        const expensesRef = ref(database, 'expenses');
+
+        // Global variables
+        let expenses = [];
+        const members = ['SUMIT KUMAR', 'SANJIT KUMAR', 'PREM KUMAR', 'KESHAV KUMAR', 'UTTAM KUMAR'];
+        let currentYear = new Date().getFullYear();
+        let currentMonth = new Date().getMonth();
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                           'July', 'August', 'September', 'October', 'November', 'December'];
+
+        // Update status indicator
+        function updateStatus(connected) {
+            const indicator = document.getElementById('statusIndicator');
+            if (connected) {
+                indicator.textContent = '✅ Connected';
+                indicator.style.background = '#27ae60';
+            } else {
+                indicator.textContent = '❌ Disconnected';
+                indicator.style.background = '#e74c3c';
+            }
+        }
+
+        // Listen for real-time updates from Firebase
+        onValue(expensesRef, (snapshot) => {
+            expenses = [];
+            snapshot.forEach((childSnapshot) => {
+                const expense = {
+                    firebaseKey: childSnapshot.key,
+                    ...childSnapshot.val()
+                };
+                expenses.push(expense);
+            });
+            updateStatus(true);
+            displayExpenses();
+            updateStats();
+            updateMemberStats();
+        }, (error) => {
+            console.error("Error reading from database:", error);
+            updateStatus(false);
+        });
+
+        // Set today's date as default
+        document.getElementById('date').valueAsDate = new Date();
+
+        // Form submission
+        document.getElementById('expenseForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const member = document.getElementById('member').value;
+            const amount = parseFloat(document.getElementById('amount').value);
+            const date = document.getElementById('date').value;
+
+            if (!member || !amount || !date) {
+                alert('Please fill all fields');
+                return;
+            }
+
+            const expense = {
+                member: member,
+                amount: amount,
+                date: date,
+                timestamp: Date.now()
+            };
+
+            // Push to Firebase
+            push(expensesRef, expense).then(() => {
+                // Reset form
+                this.reset();
+                document.getElementById('date').valueAsDate = new Date();
+            }).catch((error) => {
+                console.error("Error adding expense:", error);
+                alert('Error adding expense. Make sure your Firebase database rules allow write access.');
+            });
+        });
+
+        // Update month display
+        function updateMonthDisplay() {
+            document.getElementById('monthDisplay').textContent = 
+                `${monthNames[currentMonth]} ${currentYear}`;
+            displayExpenses();
+            updateStats();
+            updateMemberStats();
+        }
+
+        // Previous month button
+        window.previousMonth = function() {
+            currentMonth--;
+            if (currentMonth < 0) {
+                currentMonth = 11;
+                currentYear--;
+            }
+            updateMonthDisplay();
+        }
+
+        // Next month button
+        window.nextMonth = function() {
+            currentMonth++;
+            if (currentMonth > 11) {
+                currentMonth = 0;
+                currentYear++;
+            }
+            updateMonthDisplay();
+        }
+
+        // Display expenses in table
+        function displayExpenses() {
+            const expenseList = document.getElementById('expenseList');
+            
+            // Filter expenses for selected month
+            const monthlyExpenses = expenses.filter(expense => {
+                const expenseDate = new Date(expense.date);
+                return expenseDate.getMonth() === currentMonth && 
+                       expenseDate.getFullYear() === currentYear;
+            });
+
+            if (monthlyExpenses.length === 0) {
+                expenseList.innerHTML = '<tr><td colspan="5" class="no-data">No contributions added yet for this month</td></tr>';
+                return;
+            }
+
+            // Sort by date (newest first)
+            const sortedExpenses = [...monthlyExpenses].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            expenseList.innerHTML = sortedExpenses.map((expense, index) => `
+                <tr>
+                    <td>${index + 1}</td>
+                    <td>${expense.member}</td>
+                    <td>₹${expense.amount.toFixed(2)}</td>
+                    <td>${new Date(expense.date).toLocaleDateString('en-IN')}</td>
+                    <td><button class="delete-btn" onclick="window.deleteExpense('${expense.firebaseKey}')">Delete</button></td>
+                </tr>
+            `).join('');
+        }
+
+        // Delete expense from Firebase
+        window.deleteExpense = function(firebaseKey) {
+            if (confirm('Are you sure you want to delete this contribution?')) {
+                const expenseRef = ref(database, `expenses/${firebaseKey}`);
+                remove(expenseRef).catch((error) => {
+                    console.error("Error deleting expense:", error);
+                    alert('Error deleting expense');
+                });
+            }
+        }
+
+        // Update statistics
+        function updateStats() {
+            const monthlyExpenses = expenses.filter(expense => {
+                const expenseDate = new Date(expense.date);
+                return expenseDate.getMonth() === currentMonth && 
+                       expenseDate.getFullYear() === currentYear;
+            });
+
+            const totalMonth = monthlyExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+            
+            document.getElementById('totalMonth').textContent = totalMonth.toFixed(2);
+            document.getElementById('totalContributions').textContent = monthlyExpenses.length;
+        }
+
+        // Update member-wise statistics
+        function updateMemberStats() {
+            const monthlyExpenses = expenses.filter(expense => {
+                const expenseDate = new Date(expense.date);
+                return expenseDate.getMonth() === currentMonth && 
+                       expenseDate.getFullYear() === currentYear;
+            });
+
+            const memberStats = members.map(member => {
+                const memberTotal = monthlyExpenses
+                    .filter(expense => expense.member === member)
+                    .reduce((sum, expense) => sum + expense.amount, 0);
+                
+                return {
+                    name: member,
+                    total: memberTotal
+                };
+            });
+
+            const memberStatsContainer = document.getElementById('memberStats');
+            memberStatsContainer.innerHTML = memberStats.map(stat => `
+                <div class="member-card">
+                    <h4>${stat.name}</h4>
+                    <div class="member-amount">₹${stat.total.toFixed(2)}</div>
+                </div>
+            `).join('');
+        }
+
+        // Initialize display
+        updateMonthDisplay();
+    </script>
+</body>
+</html>
