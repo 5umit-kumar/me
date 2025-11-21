@@ -1,931 +1,957 @@
 <!DOCTYPE html>
-<html lang="en"> 
+<html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Student Expense Tracker</title>
-  <!-- Chart.js -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js" referrerpolicy="no-referrer"></script>
-  <!-- jsPDF + AutoTable -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" referrerpolicy="no-referrer"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.6.0/jspdf.plugin.autotable.min.js" referrerpolicy="no-referrer"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern Expense Tracker</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    
+    <!-- jsPDF + AutoTable -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.6.0/jspdf.plugin.autotable.min.js"></script>
 
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh; padding: 10px; color: #333;
-    }
-    .container {
-      max-width: 1200px; margin: 0 auto; background: #fff; border-radius: 20px;
-      box-shadow: 0 20px 40px rgba(0,0,0,0.1); overflow: hidden;
-    }
-    .header { background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%); color: #fff; padding: 2rem; text-align: center; }
-    .header h1 { font-size: 2.2rem; font-weight: 700; margin-bottom: .4rem; }
-    .header p { opacity: .9; }
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
-    /* Month Navigation */
-    .month-navigation {
-      background: linear-gradient(135deg, #34495e 0%, #2c3e50 100%);
-      padding: 1.2rem 2rem; display: flex; align-items: center; justify-content: center; gap: 2rem; color: #fff;
-    }
-    .month-nav-btn {
-      background: rgba(255,255,255,.2); border: 2px solid rgba(255,255,255,.3);
-      color: #fff; padding: .6rem 1rem; border-radius: 50px; cursor: pointer; font-weight: 600;
-      transition: .2s; min-width: 110px;
-    }
-    .month-nav-btn:hover { background: rgba(255,255,255,.3); border-color: rgba(255,255,255,.5); transform: translateY(-2px); }
-    .current-month { text-align: center; flex: 1; max-width: 320px; }
-    .current-month h2 { font-size: 1.4rem; font-weight: 700; margin-bottom: .2rem; }
-    .current-month p { opacity: .85; font-size: .95rem; }
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
 
-    .summary {
-      display: grid; grid-template-columns: 1fr; gap: 1.2rem; padding: 1.6rem;
-      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-    }
-    .balance-section {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; padding: 2rem;
-      border-radius: 18px; text-align: center; box-shadow: 0 15px 35px rgba(102,126,234,.3);
-      position: relative; overflow: hidden;
-    }
-    .balance-section h3 { font-size: 1.1rem; letter-spacing: 1px; opacity: .95; margin-bottom: .6rem; }
-    .balance-section .amount { font-size: 2.6rem; font-weight: 900; margin-bottom: .3rem; }
-    .balance-section .balance-status { opacity: .95; font-weight: 600; }
+        /* Animations */
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-slide-up { animation: slideUp 0.3s ease-out forwards; }
+        
+        /* Glass Input Autofill Fix */
+        input:-webkit-autofill,
+        input:-webkit-autofill:hover, 
+        input:-webkit-autofill:focus, 
+        input:-webkit-autofill:active{
+            -webkit-box-shadow: 0 0 0 30px #2d3748 inset !important;
+            -webkit-text-fill-color: white !important;
+            transition: background-color 5000s ease-in-out 0s;
+        }
 
-    .income-expense-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-    .summary-card {
-      background: #fff; padding: 1.4rem; border-radius: 16px; box-shadow: 0 12px 35px rgba(0,0,0,.1);
-      text-align: center; position: relative;
-    }
-    .summary-card::before {
-      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
-      background: linear-gradient(90deg, var(--card-color), var(--card-color-light));
-    }
-    .summary-card h3 { margin-bottom: .6rem; color: #333; font-size: .95rem; letter-spacing: 1px; }
-    .summary-card .amount { font-size: 1.8rem; font-weight: 900; }
-    .summary-card .icon { font-size: 2.2rem; margin-bottom: .6rem; opacity: .85; }
-    .summary-card .description { font-size: .9rem; color: #666; }
+        /* Chart Container Height */
+        .chart-wrapper {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
 
-    .income { --card-color: #27ae60; --card-color-light: #2ecc71; }
-    .income .amount {
-      background: linear-gradient(135deg, #27ae60, #2ecc71);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-    }
-    .expense { --card-color: #e74c3c; --card-color-light: #ec7063; }
-    .expense .amount {
-      background: linear-gradient(135deg, #e74c3c, #ec7063);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-    }
-
-    .main-content { display: grid; grid-template-columns: 1fr 1fr; gap: 1.4rem; padding: 1.6rem; }
-    .section { background: #fff; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,.1); overflow: hidden; }
-    .section-header { padding: 1.1rem; color: #fff; font-size: 1.05rem; font-weight: 700; text-align: center; }
-    .income-section .section-header { background: linear-gradient(135deg, #27ae60, #2ecc71); }
-    .expense-section .section-header { background: linear-gradient(135deg, #e74c3c, #c0392b); }
-    .section-content { padding: 1.1rem; }
-
-    .form-group { margin-bottom: .8rem; }
-    .form-group label { display: block; margin-bottom: .4rem; font-weight: 600; color: #555; font-size: .95rem; }
-    .form-group select, .form-group input {
-      width: 100%; padding: .7rem; border: 2px solid #ddd; border-radius: 8px; font-size: .95rem;
-      transition: border-color .2s ease;
-    }
-    .form-group select:focus, .form-group input:focus { outline: none; border-color: #3498db; }
-    .form-group input[type="date"] { color: #555; cursor: pointer; }
-    .form-group input[type="date"]::-webkit-calendar-picker-indicator {
-      background: linear-gradient(135deg, #3498db, #2980b9); border-radius: 4px; padding: 2px; cursor: pointer;
-    }
-
-    .btn { width: 100%; padding: .75rem; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; margin-top: .8rem; }
-    .btn-income { background: #27ae60; color: #fff; }
-    .btn-income:hover { background: #219a52; }
-    .btn-expense { background: #e74c3c; color: #fff; }
-    .btn-expense:hover { background: #c0392b; }
-
-    .transactions-section { margin-top: 1rem; }
-    .transactions-header {
-      display: flex; justify-content: space-between; align-items: center; margin-bottom: .8rem;
-      padding-bottom: .5rem; border-bottom: 2px solid #f1f2f6;
-    }
-    .transactions-header h4 { font-size: 1rem; color: #333; }
-    .transaction-count {
-      background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; padding: .2rem .6rem; border-radius: 14px;
-      font-size: .8rem; font-weight: 700;
-    }
-    .transactions-list { max-height: 380px; overflow-y: auto; padding-right: 5px; }
-    .transaction {
-      display: flex; justify-content: space-between; align-items: center; padding: .7rem; margin-bottom: .5rem;
-      background: #f8f9fa; border-radius: 8px; border-left: 4px solid #ddd; transition: .2s;
-    }
-    .transaction:hover { transform: translateX(4px); box-shadow: 0 3px 12px rgba(0,0,0,.1); }
-    .transaction.income { border-left-color: #27ae60; }
-    .transaction.expense { border-left-color: #e74c3c; }
-    .transaction-info { flex: 1; }
-    .transaction-category { font-weight: 700; color: #333; }
-    .transaction-description { font-size: .9rem; color: #666; margin: .15rem 0; }
-    .transaction-date { font-size: .8rem; color: #999; font-weight: 600; }
-    .transaction-right { display: flex; align-items: center; gap: .65rem; }
-    .transaction-amount { font-weight: 800; }
-    .transaction.income .transaction-amount { color: #27ae60; }
-    .transaction.expense .transaction-amount { color: #e74c3c; }
-    .delete-btn {
-      background: #dc3545; color: #fff; border: none; border-radius: 50%; width: 28px; height: 28px; cursor: pointer;
-      font-weight: 800; opacity: .85; transition: .2s;
-    }
-    .delete-btn:hover { background: #c82333; opacity: 1; transform: scale(1.07); }
-
-    .chart-section { grid-column: 1 / -1; margin-top: 1.2rem; background: #fff; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,.1); padding: 1.4rem; }
-    .chart-header { text-align: center; margin-bottom: 1rem; }
-    .chart-header h2 { color: #333; font-size: 1.3rem; margin-bottom: .3rem; }
-    .breakdown-container { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; align-items: start; }
-    .chart-container { position: relative; height: 360px; display: flex; justify-content: center; align-items: center; }
-    .expense-breakdown { padding: .6rem; }
-    .breakdown-item {
-      display: flex; align-items: center; justify-content: space-between; padding: .8rem; margin-bottom: .6rem;
-      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 12px; border-left: 4px solid #ddd;
-    }
-    .breakdown-left { display: flex; align-items: center; gap: .8rem; }
-    .breakdown-icon {
-      font-size: 1.2rem; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 10px;
-      background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.08);
-    }
-    .breakdown-info h4 { font-size: .95rem; color: #333; }
-    .breakdown-percentage { font-size: .8rem; color: #666; }
-    .breakdown-amount { font-weight: 800; color: #e74c3c; }
-
-    .no-data { text-align: center; color: #666; padding: 1.4rem; }
-
-    /* Export section */
-    .export-section {
-      grid-column: 1 / -1; margin: 1.2rem 1.6rem; background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
-      border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,.1); padding: 1.6rem; text-align: center;
-    }
-    .export-section h3 { color: #fff; font-size: 1.3rem; margin-bottom: .5rem; font-weight: 800; }
-    .export-section p { color: rgba(255,255,255,.92); margin-bottom: 1.2rem; }
-    .btn-export {
-      background: rgba(255,255,255,.2); border: 2px solid rgba(255,255,255,.4); color: #fff;
-      padding: .9rem 1.6rem; border-radius: 50px; cursor: pointer; font-weight: 800; letter-spacing: .5px;
-      transition: .2s; display: inline-flex; align-items: center; gap: .65rem;
-    }
-    .btn-export:hover { background: rgba(255,255,255,.28); border-color: rgba(255,255,255,.6); transform: translateY(-2px); }
-    .btn-export.loading { position: relative; color: transparent; }
-    .btn-export.loading::after {
-      content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      width: 18px; height: 18px; border: 2px solid rgba(255,255,255,.4); border-top: 2px solid #fff; border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-    @keyframes spin { from { transform: translate(-50%, -50%) rotate(0);} to { transform: translate(-50%, -50%) rotate(360deg);} }
-
-    /* Modal */
-    .modal { display: none; position: fixed; z-index: 10000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,.6); }
-    .modal-content {
-      background: #fff; margin: 10% auto; padding: 1.4rem; border-radius: 15px; box-shadow: 0 20px 60px rgba(0,0,0,.3);
-      width: 90%; max-width: 450px; text-align: center;
-    }
-    .modal h3 { color: #333; margin-bottom: .6rem; font-size: 1.2rem; }
-    .modal p { color: #666; margin-bottom: 1rem; line-height: 1.5; }
-    .transaction-details { background: #f8f9fa; padding: .9rem; border-radius: 8px; margin: .8rem 0; border-left: 4px solid #dc3545; text-align: left; }
-    .modal-buttons { display: flex; gap: .8rem; justify-content: center; margin-top: .9rem; }
-    .modal-btn {
-      padding: .7rem 1.2rem; border: none; border-radius: 8px; font-weight: 800; cursor: pointer; min-width: 110px;
-    }
-    .modal-btn-cancel { background: #6c757d; color: #fff; }
-    .modal-btn-cancel:hover { background: #5a6268; }
-    .modal-btn-delete { background: #dc3545; color: #fff; }
-    .modal-btn-delete:hover { background: #c82333; }
-
-    .success-message {
-      position: fixed; top: 20px; right: 20px; background: #28a745; color: #fff; padding: .9rem 1.2rem; border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,.15); z-index: 20000; font-weight: 800;
-    }
-
-    @media (max-width: 900px) {
-      .income-expense-grid { grid-template-columns: 1fr; }
-      .main-content { grid-template-columns: 1fr; }
-      .breakdown-container { grid-template-columns: 1fr; }
-      .chart-container { height: 320px; }
-    }
-  </style>
+        /* Loading Spinner */
+        .spinner {
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top: 3px solid #fff;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
 </head>
-<body>
-  <div class="container">
-    <!-- Header -->
-    <div class="header">
-      <h1>Student Expense Tracker</h1>
-      <p>Manage finances month-by-month with clean reports</p>
+<body class="min-h-screen w-full relative bg-gray-900 text-white overflow-x-hidden p-4 sm:p-6">
+
+    <!-- Background -->
+    <div class="fixed inset-0 z-0">
+        <img src="https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?q=80&w=2070&auto=format&fit=crop" alt="Background" class="w-full h-full object-cover opacity-40">
+        <div class="absolute inset-0 bg-gradient-to-br from-indigo-900/90 via-purple-900/80 to-black/80 backdrop-blur-sm"></div>
     </div>
 
-    <!-- Month Navigation -->
-    <div class="month-navigation">
-      <button class="month-nav-btn" id="prevMonth">← Previous</button>
-      <div class="current-month">
-        <h2 id="currentMonthDisplay">Month YYYY</h2>
-        <p id="monthStats">No transactions for this month</p>
-      </div>
-      <button class="month-nav-btn" id="nextMonth">Next →</button>
-    </div>
+    <div class="relative z-10 max-w-7xl mx-auto">
+        
+        <!-- Header -->
+        <div class="flex flex-col md:flex-row justify-between items-center mb-8 animate-slide-up">
+            <div class="flex items-center space-x-3 mb-4 md:mb-0">
+                <div class="p-3 bg-indigo-500/20 rounded-2xl border border-indigo-500/30 shadow-lg shadow-indigo-500/10">
+                    <i data-lucide="wallet" class="w-8 h-8 text-indigo-300"></i>
+                </div>
+                <div>
+                    <div class="text-xs font-semibold text-indigo-300 uppercase tracking-widest mb-0.5">Financial Tracker</div>
+                    <h1 class="text-2xl md:text-3xl font-bold tracking-wide text-white">Student Finances</h1>
+                </div>
+            </div>
 
-    <!-- Summary -->
-    <div class="summary">
-      <div class="balance-section">
-        <h3>Your Balance</h3>
-        <div class="amount" id="balance">₹0</div>
-        <div class="balance-status" id="balanceStatus">Your financial status</div>
-      </div>
-      <div class="income-expense-grid">
-        <div class="summary-card income">
-          <div class="icon">📈</div>
-          <h3>Total Income</h3>
-          <div class="amount" id="totalIncome">₹0</div>
-          <div class="description">Money received from all sources</div>
+            <!-- Month Navigation -->
+            <div class="flex items-center bg-white/10 backdrop-blur-md rounded-2xl p-1.5 border border-white/10 shadow-xl">
+                <button id="prevMonth" class="p-2 hover:bg-white/10 rounded-xl transition-colors text-gray-300 hover:text-white">
+                    <i data-lucide="chevron-left" class="w-5 h-5"></i>
+                </button>
+                <div class="px-6 text-center min-w-[140px]">
+                    <div id="currentMonthDisplay" class="text-sm font-bold text-white">--</div>
+                    <div id="monthStats" class="text-[10px] text-indigo-200">Loading...</div>
+                </div>
+                <button id="nextMonth" class="p-2 hover:bg-white/10 rounded-xl transition-colors text-gray-300 hover:text-white">
+                    <i data-lucide="chevron-right" class="w-5 h-5"></i>
+                </button>
+            </div>
         </div>
-        <div class="summary-card expense">
-          <div class="icon">📉</div>
-          <h3>Total Expenses</h3>
-          <div class="amount" id="totalExpenses">₹0</div>
-          <div class="description">Money spent across all categories</div>
+
+        <!-- Summary Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 animate-slide-up" style="animation-delay: 0.1s;">
+            <!-- Balance -->
+            <div class="md:col-span-1 bg-gradient-to-br from-indigo-600/90 to-purple-700/90 backdrop-blur-xl rounded-3xl p-6 border border-white/10 shadow-2xl relative overflow-hidden group">
+                <div class="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:bg-white/20 transition-colors"></div>
+                <h3 class="text-indigo-100 text-sm font-medium mb-1">Total Balance</h3>
+                <div id="balance" class="text-4xl font-bold text-white mb-2">₹0</div>
+                <div id="balanceStatus" class="text-xs text-indigo-200 bg-black/20 inline-block px-3 py-1 rounded-full">Calculating...</div>
+            </div>
+
+            <!-- Income -->
+            <div class="bg-white/5 backdrop-blur-xl rounded-3xl p-6 border border-white/10 shadow-xl hover:bg-white/10 transition-colors">
+                <div class="flex justify-between items-start mb-4">
+                    <div>
+                        <h3 class="text-gray-400 text-xs font-medium uppercase tracking-wider">Income</h3>
+                        <div id="totalIncome" class="text-2xl font-bold text-emerald-400 mt-1">₹0</div>
+                    </div>
+                    <div class="p-2 bg-emerald-500/20 rounded-xl">
+                        <i data-lucide="trending-up" class="w-6 h-6 text-emerald-400"></i>
+                    </div>
+                </div>
+                <div class="w-full bg-gray-700/50 h-1.5 rounded-full overflow-hidden">
+                    <div id="incomeBar" class="h-full bg-emerald-500" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Expense -->
+            <div class="bg-white/5 backdrop-blur-xl rounded-3xl p-6 border border-white/10 shadow-xl hover:bg-white/10 transition-colors">
+                <div class="flex justify-between items-start mb-4">
+                    <div>
+                        <h3 class="text-gray-400 text-xs font-medium uppercase tracking-wider">Expenses</h3>
+                        <div id="totalExpenses" class="text-2xl font-bold text-rose-400 mt-1">₹0</div>
+                    </div>
+                    <div class="p-2 bg-rose-500/20 rounded-xl">
+                        <i data-lucide="trending-down" class="w-6 h-6 text-rose-400"></i>
+                    </div>
+                </div>
+                <div class="w-full bg-gray-700/50 h-1.5 rounded-full overflow-hidden">
+                    <div id="expenseBar" class="h-full bg-rose-500" style="width: 0%"></div>
+                </div>
+            </div>
         </div>
-      </div>
-    </div>
 
-    <!-- Main Content -->
-    <div class="main-content">
-      <!-- Income -->
-      <div class="section income-section">
-        <div class="section-header">Add Income</div>
-        <div class="section-content">
-          <form id="incomeForm">
-            <div class="form-group">
-              <label for="incomeCategory">Category</label>
-              <select id="incomeCategory" required>
-                <option value="">Select category</option>
-                <option value="Pocket Money">💰 Pocket Money</option>
-                <option value="Borrow">🤝 Borrow</option>
-                <option value="Savings">💎 Savings</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="incomeAmount">Amount (₹)</label>
-              <input type="number" id="incomeAmount" min="0" step="0.01" required/>
-            </div>
-            <div class="form-group">
-              <label for="incomeDate">Date</label>
-              <input type="date" id="incomeDate" required/>
-            </div>
-            <div class="form-group">
-              <label for="incomeDescription">Description (Optional)</label>
-              <input type="text" id="incomeDescription" placeholder="Brief description"/>
-            </div>
-            <button type="submit" class="btn btn-income">Add Income</button>
-          </form>
+        <!-- Main Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <!-- Left Column: Input Forms -->
+            <div class="lg:col-span-1 space-y-6 animate-slide-up" style="animation-delay: 0.2s;">
+                
+                <!-- Add Transaction Container -->
+                <div class="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden">
+                    <!-- Tabs -->
+                    <div class="flex border-b border-white/10">
+                        <button onclick="switchTab('income')" id="tabIncome" class="flex-1 py-4 text-sm font-semibold text-emerald-400 bg-emerald-500/10 border-b-2 border-emerald-500 transition-all hover:bg-emerald-500/20">
+                            Add Income
+                        </button>
+                        <button onclick="switchTab('expense')" id="tabExpense" class="flex-1 py-4 text-sm font-semibold text-gray-400 hover:text-white hover:bg-white/5 transition-all border-b-2 border-transparent">
+                            Add Expense
+                        </button>
+                    </div>
 
-          <div class="transactions-section">
-            <div class="transactions-header">
-              <h4>Recent Income</h4>
-              <div class="transaction-count" id="incomeCount">0</div>
+                    <div class="p-6">
+                        <!-- Income Form -->
+                        <form id="incomeForm" class="space-y-4">
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1.5">Category</label>
+                                <div class="relative">
+                                    <select id="incomeCategory" class="w-full bg-black/20 text-white border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 appearance-none cursor-pointer" required>
+                                        <option value="" class="bg-gray-800">Select Source</option>
+                                        <option value="Pocket Money" class="bg-gray-800">💰 Pocket Money</option>
+                                        <option value="Borrow" class="bg-gray-800">🤝 Borrow</option>
+                                        <option value="Savings" class="bg-gray-800">💎 Savings</option>
+                                        <option value="Part-time Job" class="bg-gray-800">💼 Part-time Job</option>
+                                    </select>
+                                    <i data-lucide="chevron-down" class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none"></i>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1.5">Amount (₹)</label>
+                                <input type="number" id="incomeAmount" min="0" step="0.01" placeholder="0.00" class="w-full bg-black/20 text-white border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 placeholder-gray-600" required>
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1.5">Date</label>
+                                <input type="date" id="incomeDate" class="w-full bg-black/20 text-white border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/50" required>
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1.5">Description (Optional)</label>
+                                <input type="text" id="incomeDescription" placeholder="E.g. Monthly allowance" class="w-full bg-black/20 text-white border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 placeholder-gray-600">
+                            </div>
+                            <button type="submit" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-3 rounded-xl shadow-lg shadow-emerald-500/20 transition-all transform active:scale-95 flex justify-center items-center gap-2">
+                                <i data-lucide="plus-circle" class="w-5 h-5"></i> Add Income
+                            </button>
+                        </form>
+
+                        <!-- Expense Form (Hidden by default) -->
+                        <form id="expenseForm" class="space-y-4 hidden">
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1.5">Category</label>
+                                <div class="relative">
+                                    <select id="expenseCategory" class="w-full bg-black/20 text-white border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-rose-500/50 appearance-none cursor-pointer" required>
+                                        <option value="" class="bg-gray-800">Select Expense</option>
+                                        <option value="Room Rent & Room" class="bg-gray-800">🏠 Rent & Room</option>
+                                        <option value="Food" class="bg-gray-800">🍕 Food & Dining</option>
+                                        <option value="Transport" class="bg-gray-800">🚌 Transport</option>
+                                        <option value="Education" class="bg-gray-800">📚 Education Fees</option>
+                                        <option value="Books" class="bg-gray-800">📖 Books & Supplies</option>
+                                        <option value="Entertainment" class="bg-gray-800">🎮 Entertainment</option>
+                                        <option value="Mobile & Data" class="bg-gray-800">📱 Mobile & Data</option>
+                                        <option value="Others" class="bg-gray-800">🔧 Others</option>
+                                    </select>
+                                    <i data-lucide="chevron-down" class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none"></i>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1.5">Amount (₹)</label>
+                                <input type="number" id="expenseAmount" min="0" step="0.01" placeholder="0.00" class="w-full bg-black/20 text-white border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-rose-500/50 placeholder-gray-600" required>
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1.5">Date</label>
+                                <input type="date" id="expenseDate" class="w-full bg-black/20 text-white border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-rose-500/50" required>
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1.5">Description (Optional)</label>
+                                <input type="text" id="expenseDescription" placeholder="E.g. Pizza night" class="w-full bg-black/20 text-white border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-rose-500/50 placeholder-gray-600">
+                            </div>
+                            <button type="submit" class="w-full bg-rose-500 hover:bg-rose-600 text-white font-semibold py-3 rounded-xl shadow-lg shadow-rose-500/20 transition-all transform active:scale-95 flex justify-center items-center gap-2">
+                                <i data-lucide="minus-circle" class="w-5 h-5"></i> Add Expense
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Export Section -->
+                <div class="bg-gradient-to-r from-indigo-600 to-blue-600 rounded-3xl p-6 shadow-xl border border-white/10 text-center relative overflow-hidden">
+                    <div class="absolute inset-0 bg-white/5 pattern-grid-lg opacity-10"></div>
+                    <h3 class="relative z-10 text-lg font-bold text-white mb-2">Export Financial Report</h3>
+                    <p class="relative z-10 text-indigo-100 text-xs mb-4 opacity-90">Generate a professional PDF with monthly summaries, history, and breakdown chart.</p>
+                    <button id="generateData" class="relative z-10 bg-white text-indigo-600 hover:bg-indigo-50 px-6 py-2.5 rounded-xl text-sm font-bold shadow-lg transition-all transform hover:scale-105 flex items-center justify-center gap-2 mx-auto">
+                        <i data-lucide="file-text" class="w-4 h-4"></i> Download PDF
+                    </button>
+                </div>
+
             </div>
-            <div class="transactions-list" id="incomeTransactionsList">
-              <p style="text-align:center;color:#666;padding:1rem;">No income transactions yet</p>
+
+            <!-- Middle & Right Column: Charts & List -->
+            <div class="lg:col-span-2 space-y-6 animate-slide-up" style="animation-delay: 0.3s;">
+                
+                <!-- Analytics Card -->
+                <div class="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 shadow-xl">
+                    <div class="flex justify-between items-center mb-6">
+                        <div>
+                            <h2 class="text-lg font-bold text-white">Spending Breakdown</h2>
+                            <p class="text-xs text-gray-400">Where your money went this month</p>
+                        </div>
+                        <div class="p-2 bg-white/5 rounded-lg">
+                            <i data-lucide="pie-chart" class="w-5 h-5 text-indigo-300"></i>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                        <div class="chart-wrapper flex justify-center items-center">
+                            <canvas id="expenseChart"></canvas>
+                        </div>
+                        <div id="expenseBreakdown" class="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
+                            <!-- Breakdown items injected here -->
+                            <div class="text-center text-gray-500 py-10 text-sm">No expense data available yet.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Transactions -->
+                <div class="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 shadow-xl">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-bold text-white">Recent Transactions</h2>
+                        <span id="txCount" class="px-3 py-1 bg-indigo-500/20 text-indigo-300 rounded-full text-xs font-bold border border-indigo-500/30">0 Items</span>
+                    </div>
+                    
+                    <div id="transactionsList" class="space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
+                        <!-- Transactions injected here -->
+                        <div class="text-center text-gray-500 py-10">No transactions found for this month.</div>
+                    </div>
+                </div>
+
             </div>
-          </div>
         </div>
-      </div>
+    </div>
 
-      <!-- Expense -->
-      <div class="section expense-section">
-        <div class="section-header">Add Expense</div>
-        <div class="section-content">
-          <form id="expenseForm">
-            <div class="form-group">
-              <label for="expenseCategory">Category</label>
-              <select id="expenseCategory" required>
-                <option value="">Select category</option>
-                <option value="Room Rent & Room">🏠 Room Rent & Room</option>
-                <option value="Food">🍕 Food</option>
-                <option value="Transport">🚌 Transport</option>
-                <option value="Education">📚 Education</option>
-                <option value="Books">📖 Books</option>
-                <option value="Entertainment">🎮 Entertainment</option>
-                <option value="Others">🔧 Others</option>
-              </select>
+    <!-- Delete Modal -->
+    <div id="deleteModal" class="fixed inset-0 z-50 hidden flex items-center justify-center">
+        <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" onclick="expenseTracker.hideDeleteModal()"></div>
+        <div class="relative bg-gray-900 border border-white/10 p-6 rounded-3xl shadow-2xl max-w-sm w-full text-center animate-slide-up">
+            <div class="w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i data-lucide="trash-2" class="w-6 h-6 text-red-400"></i>
             </div>
-            <div class="form-group">
-              <label for="expenseAmount">Amount (₹)</label>
-              <input type="number" id="expenseAmount" min="0" step="0.01" required/>
+            <h3 class="text-xl font-bold text-white mb-2">Delete Transaction?</h3>
+            <p class="text-gray-400 text-sm mb-4">This action cannot be undone. Are you sure you want to remove this record?</p>
+            <div id="transactionDetails" class="bg-white/5 rounded-xl p-3 mb-6 text-left text-sm text-gray-300 border border-white/5"></div>
+            <div class="flex gap-3 justify-center">
+                <button onclick="expenseTracker.hideDeleteModal()" class="px-5 py-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/10 transition-colors text-sm font-medium">Cancel</button>
+                <button onclick="expenseTracker.performDelete()" class="px-5 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20 transition-colors text-sm font-medium">Delete</button>
             </div>
-            <div class="form-group">
-              <label for="expenseDate">Date</label>
-              <input type="date" id="expenseDate" required/>
-            </div>
-            <div class="form-group">
-              <label for="expenseDescription">Description (Optional)</label>
-              <input type="text" id="expenseDescription" placeholder="Brief description"/>
-            </div>
-            <button type="submit" class="btn btn-expense">Add Expense</button>
-          </form>
-
-          <div class="transactions-section">
-            <div class="transactions-header">
-              <h4>Recent Expenses</h4>
-              <div class="transaction-count" id="expenseCount">0</div>
-            </div>
-            <div class="transactions-list" id="expenseTransactionsList">
-              <p style="text-align:center;color:#666;padding:1rem;">No expense transactions yet</p>
-            </div>
-          </div>
         </div>
-      </div>
     </div>
 
-    <!-- Chart + Breakdown -->
-    <div class="chart-section">
-      <div class="chart-header">
-        <h2>Expense Breakdown & Analysis</h2>
-        <p>Visual representation of spending by category</p>
-      </div>
-      <div class="breakdown-container">
-        <div class="chart-container"><canvas id="expenseChart"></canvas></div>
-        <div class="expense-breakdown" id="expenseBreakdown">
-          <div class="no-data">No expense data available. Add some expenses to see the breakdown!</div>
-        </div>
-      </div>
-    </div>
+    <!-- Toast Container -->
+    <div id="toastContainer" class="fixed bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none"></div>
 
-    <!-- Export -->
-    <div class="export-section">
-      <h3>Generate Detailed Financial Report (PDF)</h3>
-      <p>Month-wise sections with separate Income and Expense tables, monthly category breakdown, and overall category analysis.</p>
-      <button class="btn-export" id="generateData">Generate Data</button>
-    </div>
-  </div>
-
-  <!-- Delete Modal -->
-  <div id="deleteModal" class="modal">
-    <div class="modal-content">
-      <h3>Delete Transaction</h3>
-      <p>Are you sure you want to delete this transaction?</p>
-      <div class="transaction-details" id="transactionDetails"></div>
-      <p style="color:#dc3545;font-weight:800;">This action cannot be undone!</p>
-      <div class="modal-buttons">
-        <button id="cancelDelete" class="modal-btn modal-btn-cancel">Cancel</button>
-        <button id="confirmDelete" class="modal-btn modal-btn-delete">Delete</button>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    class ExpenseTracker {
-      constructor() {
-        this.storageKey = 'studentExpenseTracker_v7_merged';
-        this.allTransactions = this.loadData();
-        this.chart = null;
-        this.deleteTransactionId = null;
-        this.currentMonth = new Date().getMonth();
-        this.currentYear = new Date().getFullYear();
-        this.categoryIcons = {
-          'Room Rent & Room': '🏠', 'Food': '🍕', 'Transport': '🚌', 'Education': '📚',
-          'Books': '📖', 'Entertainment': '🎮', 'Others': '🔧', 'Pocket Money': '💰',
-          'Borrow': '🤝', 'Savings': '💎'
+    <script>
+        // --- Toast Notification System ---
+        const addToast = (message, type = 'success') => {
+            const container = document.getElementById('toastContainer');
+            const el = document.createElement('div');
+            const bgClass = type === 'success' ? 'bg-emerald-500/90' : (type === 'error' ? 'bg-rose-500/90' : 'bg-indigo-500/90');
+            el.className = `pointer-events-auto ${bgClass} backdrop-blur-md text-white px-4 py-3 rounded-xl shadow-xl border border-white/10 flex items-center gap-3 animate-slide-up max-w-xs`;
+            
+            let icon = type === 'success' ? 'check-circle' : (type === 'error' ? 'alert-circle' : 'info');
+            el.innerHTML = `
+                <i data-lucide="${icon}" class="w-5 h-5 shrink-0"></i>
+                <span class="text-sm font-medium">${message}</span>
+            `;
+            container.appendChild(el);
+            lucide.createIcons();
+            setTimeout(() => {
+                el.style.opacity = '0';
+                el.style.transform = 'translateY(10px)';
+                setTimeout(() => el.remove(), 300);
+            }, 3000);
         };
-        this.monthNames = [
-          'January','February','March','April','May','June',
-          'July','August','September','October','November','December'
-        ];
-        this.init();
-      }
 
-      loadData() {
-        try {
-          const data = localStorage.getItem(this.storageKey);
-          return data ? JSON.parse(data) : [];
-        } catch(e) {
-          console.error('Load error', e);
-          return [];
+        // --- Logic Class ---
+        class ExpenseTracker {
+            constructor() {
+                this.storageKey = 'glass_expense_tracker_v1';
+                this.allTransactions = this.loadData();
+                this.chart = null;
+                this.deleteTransactionId = null;
+                this.currentMonth = new Date().getMonth();
+                this.currentYear = new Date().getFullYear();
+                this.categoryIcons = {
+                    'Room Rent & Room': '🏠', 'Food': '🍕', 'Transport': '🚌', 'Education': '📚',
+                    'Books': '📖', 'Entertainment': '🎮', 'Mobile & Data': '📱', 'Others': '🔧', 
+                    'Pocket Money': '💰', 'Borrow': '🤝', 'Savings': '💎', 'Part-time Job': '💼'
+                };
+                this.monthNames = [
+                    'January','February','March','April','May','June',
+                    'July','August','September','October','November','December'
+                ];
+                
+                this.init();
+            }
+
+            loadData() {
+                try {
+                    const data = localStorage.getItem(this.storageKey);
+                    return data ? JSON.parse(data) : [];
+                } catch(e) {
+                    console.error('Load error', e);
+                    return [];
+                }
+            }
+
+            saveData() {
+                try { localStorage.setItem(this.storageKey, JSON.stringify(this.allTransactions)); }
+                catch(e){ console.error('Save error', e); addToast('Unable to save data', 'error'); }
+            }
+
+            init() {
+                this.bindEvents();
+                this.setDefaultDates();
+                this.updateMonthDisplay();
+                this.updateAll();
+                lucide.createIcons();
+            }
+
+            setDefaultDates() {
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('incomeDate').value = today;
+                document.getElementById('expenseDate').value = today;
+            }
+
+            bindEvents() {
+                document.getElementById('incomeForm').addEventListener('submit', (e) => { e.preventDefault(); this.addTransaction('income'); });
+                document.getElementById('expenseForm').addEventListener('submit', (e) => { e.preventDefault(); this.addTransaction('expense'); });
+                document.getElementById('prevMonth').addEventListener('click', () => this.navigateMonth(-1));
+                document.getElementById('nextMonth').addEventListener('click', () => this.navigateMonth(1));
+                document.getElementById('generateData').addEventListener('click', () => this.generateEnhancedPDF());
+            }
+
+            navigateMonth(dir) {
+                this.currentMonth += dir;
+                if(this.currentMonth > 11){ this.currentMonth = 0; this.currentYear++; }
+                else if(this.currentMonth < 0){ this.currentMonth = 11; this.currentYear--; }
+                this.updateMonthDisplay(); 
+                this.updateAll();
+            }
+
+            updateMonthDisplay() {
+                const monthDisplay = document.getElementById('currentMonthDisplay');
+                const monthStats = document.getElementById('monthStats');
+                monthDisplay.textContent = `${this.monthNames[this.currentMonth]} ${this.currentYear}`;
+
+                const tx = this.getCurrentMonthTransactions();
+                if(tx.length === 0) monthStats.textContent = 'No transactions';
+                else {
+                    const inc = tx.filter(t=>t.type==='income').length;
+                    const exp = tx.filter(t=>t.type==='expense').length;
+                    monthStats.textContent = `${inc} Income • ${exp} Expenses`;
+                }
+            }
+
+            getCurrentMonthKey() { 
+                return `${this.currentYear}-${String(this.currentMonth+1).padStart(2,'0')}`; 
+            }
+
+            getCurrentMonthTransactions() {
+                const key = this.getCurrentMonthKey();
+                return this.allTransactions.filter(t => {
+                    const d = new Date(t.timestamp);
+                    const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+                    return k === key;
+                });
+            }
+
+            addTransaction(type) {
+                const formId = type === 'income' ? 'incomeForm' : 'expenseForm';
+                const catId = type === 'income' ? 'incomeCategory' : 'expenseCategory';
+                const amtId = type === 'income' ? 'incomeAmount' : 'expenseAmount';
+                const dateId = type === 'income' ? 'incomeDate' : 'expenseDate';
+                const descId = type === 'income' ? 'incomeDescription' : 'expenseDescription';
+
+                const category = document.getElementById(catId).value;
+                const amount = parseFloat(document.getElementById(amtId).value);
+                const dateInput = document.getElementById(dateId).value;
+                const description = document.getElementById(descId).value;
+
+                if(!category || !amount || amount <= 0 || !dateInput) { 
+                    addToast('Please fill all required fields', 'error'); return; 
+                }
+
+                const d = new Date(dateInput + 'T00:00:00');
+                const now = new Date(); 
+                d.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
+
+                const tx = { 
+                    id: Date.now().toString(36) + Math.random().toString(36).slice(2), 
+                    type: type, 
+                    category: category,
+                    amount: amount, 
+                    description: description || 'No description', 
+                    date: d.toLocaleDateString('en-IN'), 
+                    timestamp: d.getTime() 
+                };
+
+                this.allTransactions.unshift(tx);
+                this.saveData(); 
+                this.updateAll();
+                
+                document.getElementById(formId).reset(); 
+                this.setDefaultDates();
+                addToast(`${type === 'income' ? 'Income' : 'Expense'} added successfully`);
+            }
+
+            updateAll() { 
+                this.updateSummary(); 
+                this.renderTransactions(); 
+                this.updateChart(); 
+                lucide.createIcons();
+            }
+
+            updateSummary() {
+                const tx = this.getCurrentMonthTransactions();
+                const totalIncome = tx.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
+                const totalExpenses = tx.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
+                const balance = totalIncome - totalExpenses;
+
+                document.getElementById('totalIncome').textContent = `₹${totalIncome.toLocaleString('en-IN')}`;
+                document.getElementById('totalExpenses').textContent = `₹${totalExpenses.toLocaleString('en-IN')}`;
+                document.getElementById('balance').textContent = `₹${balance.toLocaleString('en-IN')}`;
+
+                const statusEl = document.getElementById('balanceStatus');
+                
+                if(balance > 0){
+                    statusEl.textContent = 'Healthy Balance';
+                    statusEl.className = 'text-xs text-emerald-300 bg-emerald-500/20 inline-block px-3 py-1 rounded-full border border-emerald-500/30';
+                } else if(balance === 0){
+                    statusEl.textContent = 'Balanced';
+                    statusEl.className = 'text-xs text-blue-300 bg-blue-500/20 inline-block px-3 py-1 rounded-full border border-blue-500/30';
+                } else {
+                    statusEl.textContent = 'Overspent';
+                    statusEl.className = 'text-xs text-rose-300 bg-rose-500/20 inline-block px-3 py-1 rounded-full border border-rose-500/30';
+                }
+
+                const max = Math.max(totalIncome, totalExpenses) || 1;
+                document.getElementById('incomeBar').style.width = `${(totalIncome/max)*100}%`;
+                document.getElementById('expenseBar').style.width = `${(totalExpenses/max)*100}%`;
+            }
+
+            renderTransactions() {
+                const list = document.getElementById('transactionsList');
+                const count = document.getElementById('txCount');
+                const tx = this.getCurrentMonthTransactions().sort((a,b) => b.timestamp - a.timestamp);
+
+                count.textContent = `${tx.length} Items`;
+                list.innerHTML = '';
+
+                if(tx.length === 0) {
+                    list.innerHTML = `<div class="flex flex-col items-center justify-center py-8 text-gray-500 opacity-60"><i data-lucide="inbox" class="w-10 h-10 mb-2"></i><p class="text-sm">No transactions yet</p></div>`;
+                    return;
+                }
+
+                tx.forEach(t => {
+                    const icon = this.categoryIcons[t.category] || '💠';
+                    const isInc = t.type === 'income';
+                    const colorClass = isInc ? 'text-emerald-400' : 'text-rose-400';
+                    const bgClass = isInc ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-rose-500/10 border-rose-500/20';
+                    const sign = isInc ? '+' : '-';
+
+                    const div = document.createElement('div');
+                    div.className = `group flex items-center justify-between p-3 rounded-xl border border-white/5 bg-white/5 hover:bg-white/10 transition-all duration-200`;
+                    div.innerHTML = `
+                        <div class="flex items-center gap-3 overflow-hidden">
+                            <div class="w-10 h-10 rounded-lg flex items-center justify-center text-lg ${bgClass}">
+                                ${icon}
+                            </div>
+                            <div class="min-w-0">
+                                <div class="font-semibold text-sm text-gray-200 truncate">${t.category}</div>
+                                <div class="text-xs text-gray-500 truncate">${t.description} • ${t.date}</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="font-bold ${colorClass}">${sign}₹${t.amount.toLocaleString('en-IN')}</span>
+                            <button onclick="expenseTracker.showDeleteModal('${t.id}')" class="opacity-0 group-hover:opacity-100 p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    `;
+                    list.appendChild(div);
+                });
+            }
+
+            updateChart() {
+                const tx = this.getCurrentMonthTransactions();
+                const expenses = tx.filter(t => t.type === 'expense');
+                const container = document.getElementById('expenseBreakdown');
+                
+                if(expenses.length === 0) {
+                    container.innerHTML = '<div class="text-center text-gray-500 py-10 text-sm opacity-60">No expenses to analyze.</div>';
+                    if(this.chart) { this.chart.destroy(); this.chart = null; }
+                    return;
+                }
+
+                const byCat = {};
+                expenses.forEach(t => { byCat[t.category] = (byCat[t.category] || 0) + t.amount; });
+                
+                const totalExp = Object.values(byCat).reduce((a,b) => a+b, 0);
+                const sortedCats = Object.entries(byCat).sort((a,b) => b[1] - a[1]);
+
+                container.innerHTML = sortedCats.map(([cat, amt]) => {
+                    const pct = ((amt/totalExp)*100).toFixed(1);
+                    const icon = this.categoryIcons[cat] || '🏷️';
+                    return `
+                        <div class="flex items-center justify-between p-2 rounded-lg hover:bg-white/5 transition-colors">
+                            <div class="flex items-center gap-2">
+                                <span class="text-sm">${icon}</span>
+                                <div>
+                                    <div class="text-xs font-medium text-gray-200">${cat}</div>
+                                    <div class="w-16 h-1 bg-gray-700 rounded-full mt-1 overflow-hidden">
+                                        <div class="h-full bg-indigo-500" style="width: ${pct}%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-xs font-bold text-white">₹${amt.toLocaleString('en-IN')}</div>
+                                <div class="text-[10px] text-gray-500">${pct}%</div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                const ctx = document.getElementById('expenseChart').getContext('2d');
+                const labels = sortedCats.map(x => x[0]);
+                const data = sortedCats.map(x => x[1]);
+                const colors = [
+                    '#818cf8', '#34d399', '#f472b6', '#fbbf24', '#60a5fa', 
+                    '#a78bfa', '#f87171', '#2dd4bf', '#fb923c', '#9ca3af'
+                ];
+
+                if(this.chart) this.chart.destroy();
+                
+                Chart.defaults.color = '#9ca3af';
+                Chart.defaults.borderColor = '#374151';
+
+                this.chart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            data: data,
+                            backgroundColor: colors,
+                            borderWidth: 0,
+                            hoverOffset: 10
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '70%',
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                backgroundColor: 'rgba(17, 24, 39, 0.9)',
+                                titleColor: '#fff',
+                                bodyColor: '#e5e7eb',
+                                padding: 10,
+                                cornerRadius: 8,
+                                displayColors: true
+                            }
+                        }
+                    }
+                });
+            }
+
+            showDeleteModal(id) {
+                const t = this.allTransactions.find(x => x.id === id);
+                if(!t) return;
+                this.deleteTransactionId = id;
+                document.getElementById('transactionDetails').innerHTML = `
+                    <div class="flex justify-between mb-1"><span class="text-gray-400">Category:</span> <span class="text-white">${t.category}</span></div>
+                    <div class="flex justify-between mb-1"><span class="text-gray-400">Amount:</span> <span class="text-white font-bold">₹${t.amount}</span></div>
+                    <div class="flex justify-between"><span class="text-gray-400">Date:</span> <span class="text-white">${t.date}</span></div>
+                `;
+                document.getElementById('deleteModal').classList.remove('hidden');
+            }
+
+            hideDeleteModal() {
+                document.getElementById('deleteModal').classList.add('hidden');
+                this.deleteTransactionId = null;
+            }
+
+            performDelete() {
+                if(!this.deleteTransactionId) return;
+                this.allTransactions = this.allTransactions.filter(t => t.id !== this.deleteTransactionId);
+                this.saveData();
+                this.updateAll();
+                this.hideDeleteModal();
+                addToast('Transaction deleted', 'success');
+            }
+
+            getAllMonthsSummary() {
+                const monthly = {};
+                this.allTransactions.forEach(t => {
+                    const d = new Date(t.timestamp);
+                    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+                    if(!monthly[key]) {
+                        monthly[key] = {
+                            month: `${this.monthNames[d.getMonth()]} ${d.getFullYear()}`,
+                            monthKey: key,
+                            income: 0, expenses: 0, balance: 0, transactionCount: 0,
+                            incomeTransactions: [], expenseTransactions: [], categories: {}
+                        };
+                    }
+                    const m = monthly[key];
+                    m.transactionCount++;
+                    if(t.type === 'income') { 
+                        m.income += t.amount; 
+                        m.incomeTransactions.push(t); 
+                    } else { 
+                        m.expenses += t.amount; 
+                        m.expenseTransactions.push(t); 
+                        m.categories[t.category] = (m.categories[t.category] || 0) + t.amount; 
+                    }
+                    m.balance = m.income - m.expenses;
+                });
+                return Object.entries(monthly).sort(([a],[b]) => b.localeCompare(a)).map(([,v]) => v);
+            }
+
+            // --- Helper to Generate Chart Image for PDF ---
+            async getChartImage(labels, data) {
+                return new Promise((resolve) => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 400; // Resolution for PDF
+                    canvas.height = 200;
+                    const ctx = canvas.getContext('2d');
+                    
+                    const chart = new Chart(ctx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                data: data,
+                                backgroundColor: [
+                                    '#818cf8', '#34d399', '#f472b6', '#fbbf24', '#60a5fa', 
+                                    '#a78bfa', '#f87171', '#2dd4bf', '#fb923c', '#9ca3af'
+                                ],
+                                borderWidth: 0
+                            }]
+                        },
+                        options: {
+                            animation: false, 
+                            responsive: false,
+                            plugins: {
+                                legend: { 
+                                    display: true, 
+                                    position: 'right',
+                                    labels: { font: { size: 14 } }
+                                } 
+                            }
+                        }
+                    });
+                    
+                    setTimeout(() => {
+                        const img = chart.toBase64Image();
+                        chart.destroy();
+                        resolve(img);
+                    }, 200);
+                });
+            }
+
+            async generateEnhancedPDF() {
+                const btn = document.getElementById('generateData');
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '<div class="spinner"></div> Generating...';
+                btn.disabled = true;
+
+                try {
+                    const { jsPDF } = window.jspdf;
+                    const doc = new jsPDF('p', 'pt', 'a4');
+                    const pageWidth = doc.internal.pageSize.getWidth();
+                    const pageHeight = doc.internal.pageSize.getHeight();
+                    const left = 40, right = 40, usableWidth = pageWidth - left - right;
+                    let y = 50;
+
+                    const monthlyData = this.getAllMonthsSummary();
+
+                    doc.setFont('helvetica', 'bold'); 
+                    doc.setFontSize(22); 
+                    doc.setTextColor(67, 56, 202); 
+                    doc.text('Student Expense Tracker', pageWidth/2, y, {align:'center'});
+
+                    y += 20; 
+                    doc.setFont('helvetica', 'normal'); 
+                    doc.setFontSize(12); 
+                    doc.setTextColor(107, 114, 128);
+                    doc.text('Comprehensive Financial Report', pageWidth/2, y, {align:'center'});
+
+                    y += 25;
+                    doc.setFontSize(10);
+                    doc.text(`Generated on: ${new Date().toLocaleDateString('en-IN', {dateStyle:'full'})}`, pageWidth/2, y, {align:'center'});
+
+                    y += 30;
+                    doc.setDrawColor(226, 232, 240);
+                    doc.setFillColor(248, 250, 252);
+                    doc.roundedRect(left, y, usableWidth, 90, 5, 5, 'FD');
+
+                    const totalInc = monthlyData.reduce((s,m)=>s+m.income,0);
+                    const totalExp = monthlyData.reduce((s,m)=>s+m.expenses,0);
+                    const netBal = totalInc - totalExp;
+
+                    y += 25;
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(14);
+                    doc.setTextColor(31, 41, 55);
+                    doc.text('Executive Summary', pageWidth/2, y, {align:'center'});
+
+                    y += 20;
+                    doc.setFont('helvetica', 'normal');
+                    doc.setFontSize(11);
+                    doc.setTextColor(55, 65, 81);
+                    doc.text(`Total Income: Rs. ${totalInc.toLocaleString('en-IN')}`, left + 40, y);
+                    doc.text(`Total Expenses: Rs. ${totalExp.toLocaleString('en-IN')}`, pageWidth - right - 40, y, {align:'right'});
+                    
+                    y += 20;
+                    doc.setFont('helvetica', 'bold');
+                    doc.setTextColor(netBal >= 0 ? 16 : 220, netBal >= 0 ? 185 : 38, netBal >= 0 ? 129 : 38); 
+                    doc.text(`Net Balance: Rs. ${netBal.toLocaleString('en-IN')}`, pageWidth/2, y, {align:'center'});
+
+                    doc.addPage(); y = 50;
+
+                    // --- Overall Analysis & Chart ---
+                    doc.setFont('helvetica', 'bold'); 
+                    doc.setFontSize(16); 
+                    doc.setTextColor(67, 56, 202);
+                    doc.text('Overall Expense Analysis', pageWidth/2, y, {align:'center'});
+                    y += 30;
+
+                    // Calculate Overall Data
+                    const allCats = {};
+                    monthlyData.forEach(m => {
+                        Object.entries(m.categories).forEach(([cat, amt]) => {
+                            allCats[cat] = (allCats[cat] || 0) + amt;
+                        });
+                    });
+                    const sortedAllCats = Object.entries(allCats).sort((a,b) => b[1] - a[1]);
+                    const labels = sortedAllCats.map(x => x[0]);
+                    const data = sortedAllCats.map(x => x[1]);
+
+                    if(labels.length > 0) {
+                        const chartImg = await this.getChartImage(labels, data);
+                        const chartWidth = 300;
+                        const chartHeight = 150; 
+                        const xPos = (pageWidth - chartWidth) / 2;
+                        
+                        doc.addImage(chartImg, 'PNG', xPos, y, chartWidth, chartHeight);
+                        y += chartHeight + 20;
+
+                        // Overall Table
+                        doc.autoTable({
+                            startY: y,
+                            head: [['Category', 'Total Amount']],
+                            body: sortedAllCats.map(([c, a]) => [c, `Rs. ${a.toLocaleString('en-IN')}`]),
+                            theme: 'striped',
+                            headStyles: { fillColor: [79, 70, 229] },
+                            margin: { left, right }
+                        });
+                        y = doc.lastAutoTable.finalY + 40;
+                    }
+
+                    // --- Monthly Data ---
+                    monthlyData.forEach((m, idx) => {
+                        if(y > pageHeight - 100) { doc.addPage(); y = 50; }
+
+                        doc.setFillColor(238, 242, 255); 
+                        doc.setDrawColor(199, 210, 254);
+                        doc.rect(left, y, usableWidth, 30, 'F');
+                        
+                        doc.setFont('helvetica', 'bold');
+                        doc.setFontSize(14);
+                        doc.setTextColor(67, 56, 202);
+                        doc.text(m.month, left + 10, y + 20);
+
+                        y += 45;
+
+                        doc.autoTable({
+                            startY: y,
+                            head: [['Summary', 'Amount']],
+                            body: [
+                                ['Income', `Rs. ${m.income.toLocaleString('en-IN')}`],
+                                ['Expenses', `Rs. ${m.expenses.toLocaleString('en-IN')}`],
+                                ['Balance', `Rs. ${m.balance.toLocaleString('en-IN')}`]
+                            ],
+                            theme: 'grid',
+                            headStyles: { fillColor: [79, 70, 229], textColor: 255, fontStyle: 'bold' },
+                            styles: { fontSize: 10, cellPadding: 6 },
+                            margin: { left, right }
+                        });
+                        y = doc.lastAutoTable.finalY + 20;
+
+                        if (m.incomeTransactions.length > 0) {
+                            if (y > pageHeight - 60) { doc.addPage(); y = 50; }
+                            
+                            doc.setFontSize(12);
+                            doc.setTextColor(16, 185, 129); 
+                            doc.text('Income History', left, y);
+                            y += 10;
+
+                            const incomeRows = m.incomeTransactions.sort((a,b) => b.timestamp - a.timestamp).map(t => [
+                                t.date, t.category, t.description, `Rs. ${t.amount.toLocaleString('en-IN')}`
+                            ]);
+
+                            doc.autoTable({
+                                startY: y,
+                                head: [['Date', 'Category', 'Description', 'Amount']],
+                                body: incomeRows,
+                                theme: 'striped',
+                                headStyles: { fillColor: [16, 185, 129], textColor: 255 },
+                                styles: { fontSize: 9 },
+                                columnStyles: { 0: { cellWidth: 60 }, 1: { cellWidth: 100 }, 3: { halign: 'right', fontStyle: 'bold' } },
+                                margin: { left, right }
+                            });
+                            y = doc.lastAutoTable.finalY + 20;
+                        }
+
+                        if (m.expenseTransactions.length > 0) {
+                            if (y > pageHeight - 60) { doc.addPage(); y = 50; }
+                            
+                            doc.setFontSize(12);
+                            doc.setTextColor(225, 29, 72); 
+                            doc.text('Expense History', left, y);
+                            y += 10;
+
+                            const expenseRows = m.expenseTransactions.sort((a,b) => b.timestamp - a.timestamp).map(t => [
+                                t.date, t.category, t.description, `Rs. ${t.amount.toLocaleString('en-IN')}`
+                            ]);
+
+                            doc.autoTable({
+                                startY: y,
+                                head: [['Date', 'Category', 'Description', 'Amount']],
+                                body: expenseRows,
+                                theme: 'striped',
+                                headStyles: { fillColor: [225, 29, 72], textColor: 255 },
+                                styles: { fontSize: 9 },
+                                columnStyles: { 0: { cellWidth: 60 }, 1: { cellWidth: 100 }, 3: { halign: 'right', fontStyle: 'bold' } },
+                                margin: { left, right }
+                            });
+                            y = doc.lastAutoTable.finalY + 20;
+                        }
+
+                        if(idx < monthlyData.length - 1) {
+                            doc.setDrawColor(229, 231, 235);
+                            doc.line(left, y, pageWidth - right, y);
+                            y += 30;
+                        }
+                    });
+
+                    const pageCount = doc.internal.getNumberOfPages();
+                    for(let i = 1; i <= pageCount; i++) {
+                        doc.setPage(i);
+                        doc.setFontSize(8);
+                        doc.setTextColor(156, 163, 175);
+                        doc.text(`Page ${i} of ${pageCount}`, pageWidth/2, pageHeight - 15, {align:'center'});
+                    }
+
+                    doc.save(`Expense_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+                    addToast('Report generated successfully');
+
+                } catch (err) {
+                    console.error(err);
+                    addToast('Failed to generate PDF', 'error');
+                } finally {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }
+            }
         }
-      }
-      saveData() {
-        try { localStorage.setItem(this.storageKey, JSON.stringify(this.allTransactions)); }
-        catch(e){ console.error('Save error', e); alert('Unable to save data (storage).'); }
-      }
 
-      init() {
-        this.bindEvents();
-        this.setDefaultDates();
-        this.updateMonthDisplay();
-        this.updateAll();
-      }
+        function switchTab(tab) {
+            const incForm = document.getElementById('incomeForm');
+            const expForm = document.getElementById('expenseForm');
+            const tabInc = document.getElementById('tabIncome');
+            const tabExp = document.getElementById('tabExpense');
 
-      setDefaultDates() {
-        const today = new Date().toISOString().split('T')[0];
-        document.getElementById('incomeDate').value = today;
-        document.getElementById('expenseDate').value = today;
-      }
+            if(tab === 'income') {
+                incForm.classList.remove('hidden');
+                expForm.classList.add('hidden');
+                tabInc.className = 'flex-1 py-4 text-sm font-semibold text-emerald-400 bg-emerald-500/10 border-b-2 border-emerald-500 transition-all';
+                tabExp.className = 'flex-1 py-4 text-sm font-semibold text-gray-400 hover:text-white hover:bg-white/5 transition-all border-b-2 border-transparent';
+            } else {
+                incForm.classList.add('hidden');
+                expForm.classList.remove('hidden');
+                tabExp.className = 'flex-1 py-4 text-sm font-semibold text-rose-400 bg-rose-500/10 border-b-2 border-rose-500 transition-all';
+                tabInc.className = 'flex-1 py-4 text-sm font-semibold text-gray-400 hover:text-white hover:bg-white/5 transition-all border-b-2 border-transparent';
+            }
+        }
 
-      bindEvents() {
-        document.getElementById('incomeForm').addEventListener('submit', (e)=>{ e.preventDefault(); this.addIncome(); });
-        document.getElementById('expenseForm').addEventListener('submit', (e)=>{ e.preventDefault(); this.addExpense(); });
-        document.getElementById('prevMonth').addEventListener('click', ()=> this.navigateMonth(-1));
-        document.getElementById('nextMonth').addEventListener('click', ()=> this.navigateMonth(1));
-        document.getElementById('generateData').addEventListener('click', ()=> this.generateEnhancedPDF());
-        document.getElementById('cancelDelete').addEventListener('click', ()=> this.hideDeleteModal());
-        document.getElementById('confirmDelete').addEventListener('click', ()=> this.performDelete());
-        document.getElementById('deleteModal').addEventListener('click', (e)=>{ if(e.target===e.currentTarget) this.hideDeleteModal(); });
-        document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && document.getElementById('deleteModal').style.display==='block') this.hideDeleteModal(); });
-      }
-
-      getCurrentMonthKey() { return `${this.currentYear}-${String(this.currentMonth+1).padStart(2,'0')}`; }
-      getCurrentMonthTransactions() {
-        const key = this.getCurrentMonthKey();
-        return this.allTransactions.filter(t=>{
-          const d = new Date(t.timestamp);
-          const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-          return k===key;
+        let expenseTracker;
+        document.addEventListener('DOMContentLoaded', () => {
+            expenseTracker = new ExpenseTracker();
+            window.expenseTracker = expenseTracker;
         });
-      }
-
-      navigateMonth(dir) {
-        this.currentMonth += dir;
-        if(this.currentMonth>11){ this.currentMonth=0; this.currentYear++; }
-        else if(this.currentMonth<0){ this.currentMonth=11; this.currentYear--; }
-        this.updateMonthDisplay(); this.updateAll();
-      }
-
-      updateMonthDisplay() {
-        const monthDisplay = document.getElementById('currentMonthDisplay');
-        const monthStats = document.getElementById('monthStats');
-        monthDisplay.textContent = `${this.monthNames[this.currentMonth]} ${this.currentYear}`;
-
-        const tx = this.getCurrentMonthTransactions();
-        if(tx.length===0) monthStats.textContent = 'No transactions for this month';
-        else {
-          const incomes = tx.filter(t=>t.type==='income').length;
-          const expenses = tx.filter(t=>t.type==='expense').length;
-          monthStats.textContent = `${tx.length} transactions (${incomes} income, ${expenses} expenses)`;
-        }
-      }
-
-      generateUniqueId() { return Date.now().toString(36)+Math.random().toString(36).slice(2); }
-
-      addIncome() {
-        const category = document.getElementById('incomeCategory').value;
-        const amount = parseFloat(document.getElementById('incomeAmount').value);
-        const dateInput = document.getElementById('incomeDate').value;
-        const description = document.getElementById('incomeDescription').value;
-
-        if(!category || !amount || amount<=0 || !dateInput) { alert('Fill valid income details.'); return; }
-
-        const d = new Date(dateInput+'T00:00:00');
-        const now = new Date(); d.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
-
-        const tx = { id:this.generateUniqueId(), type:'income', category: category.replace(/^[^\s]+\s/,''),
-          amount, description: description || 'No description', date: d.toLocaleDateString('en-IN'), timestamp: d.getTime() };
-
-        this.allTransactions.unshift(tx);
-        this.saveData(); this.updateAll();
-        document.getElementById('incomeForm').reset(); this.setDefaultDates();
-        this.showSuccessMessage('Income added successfully!');
-      }
-
-      addExpense() {
-        const category = document.getElementById('expenseCategory').value;
-        const amount = parseFloat(document.getElementById('expenseAmount').value);
-        const dateInput = document.getElementById('expenseDate').value;
-        const description = document.getElementById('expenseDescription').value;
-
-        if(!category || !amount || amount<=0 || !dateInput) { alert('Fill valid expense details.'); return; }
-
-        const d = new Date(dateInput+'T00:00:00');
-        const now = new Date(); d.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
-
-        const tx = { id:this.generateUniqueId(), type:'expense', category: category.replace(/^[^\s]+\s/,''),
-          amount, description: description || 'No description', date: d.toLocaleDateString('en-IN'), timestamp: d.getTime() };
-
-        this.allTransactions.unshift(tx);
-        this.saveData(); this.updateAll();
-        document.getElementById('expenseForm').reset(); this.setDefaultDates();
-        this.showSuccessMessage('Expense added successfully!');
-      }
-
-      showDeleteModal(id) {
-        const t = this.allTransactions.find(x=>x.id===id);
-        if(!t) return;
-        this.deleteTransactionId = id;
-        document.getElementById('transactionDetails').innerHTML =
-          `<div><strong>Category:</strong> ${this.categoryIcons[t.category]||'💠'} ${t.category}<br/>
-            <strong>Amount:</strong> ₹${t.amount.toLocaleString()}<br/>
-            <strong>Description:</strong> ${t.description}<br/>
-            <strong>Date:</strong> ${t.date}<br/>
-            <strong>Type:</strong> ${t.type==='income'?'Income':'Expense'}</div>`;
-        document.getElementById('deleteModal').style.display='block';
-        document.body.style.overflow='hidden';
-      }
-      hideDeleteModal(){ document.getElementById('deleteModal').style.display='none'; document.body.style.overflow='auto'; this.deleteTransactionId=null; }
-      performDelete(){
-        if(!this.deleteTransactionId) return;
-        const idx = this.allTransactions.findIndex(t=>t.id===this.deleteTransactionId);
-        if(idx>-1) this.allTransactions.splice(idx,1);
-        this.saveData(); this.updateAll(); this.hideDeleteModal();
-        this.showSuccessMessage('Transaction deleted successfully!');
-      }
-
-      showSuccessMessage(msg){
-        const old = document.querySelector('.success-message'); if(old) old.remove();
-        const el = document.createElement('div'); el.className='success-message'; el.textContent = msg; document.body.appendChild(el);
-        setTimeout(()=>{ if(el && el.parentNode) el.parentNode.removeChild(el); }, 2500);
-      }
-
-      updateAll(){ this.updateSummary(); this.renderTransactions(); this.updateChart(); }
-
-      updateSummary(){
-        const tx = this.getCurrentMonthTransactions();
-        const totalIncome = tx.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
-        const totalExpenses = tx.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
-        const balance = totalIncome - totalExpenses;
-
-        document.getElementById('totalIncome').textContent = `₹${totalIncome.toLocaleString()}`;
-        document.getElementById('totalExpenses').textContent = `₹${totalExpenses.toLocaleString()}`;
-        const balanceEl = document.getElementById('balance'); balanceEl.textContent=`₹${balance.toLocaleString()}`;
-
-        const section = balanceEl.closest('.balance-section');
-        const statusEl = document.getElementById('balanceStatus');
-        if(balance>0){
-          statusEl.textContent='Great! You have money left';
-          section.style.background = 'linear-gradient(135deg,#27ae60 0%,#2ecc71 100%)';
-          section.style.boxShadow = '0 15px 35px rgba(39,174,96,.3)';
-        } else if(balance===0){
-          statusEl.textContent='Perfect balance!';
-          section.style.background = 'linear-gradient(135deg,#3498db 0%,#5dade2 100%)';
-          section.style.boxShadow = '0 15px 35px rgba(52,152,219,.3)';
-        } else {
-          statusEl.textContent='You are overspending!';
-          section.style.background = 'linear-gradient(135deg,#e74c3c 0%,#ec7063 100%)';
-          section.style.boxShadow = '0 15px 35px rgba(231,76,60,.3)';
-        }
-      }
-
-      renderTransactions(){
-        const incomeList = document.getElementById('incomeTransactionsList');
-        const expenseList = document.getElementById('expenseTransactionsList');
-        const incomeCount = document.getElementById('incomeCount');
-        const expenseCount = document.getElementById('expenseCount');
-
-        const tx = this.getCurrentMonthTransactions();
-        const incomes = tx.filter(t=>t.type==='income').sort((a,b)=>b.timestamp-a.timestamp);
-        const expenses = tx.filter(t=>t.type==='expense').sort((a,b)=>b.timestamp-a.timestamp);
-
-        incomeCount.textContent = incomes.length;
-        expenseCount.textContent = expenses.length;
-
-        incomeList.innerHTML = this.renderTransactionList(incomes,'income');
-        expenseList.innerHTML = this.renderTransactionList(expenses,'expense');
-      }
-
-      renderTransactionList(list,type){
-        if(list.length===0) return `<p style="text-align:center;color:#666;padding:1rem;">No ${type} transactions for this month</p>`;
-        const displayCount = Math.min(Math.max(5, list.length), 15);
-        return list.slice(0,displayCount).map(t=>{
-          const icon = this.categoryIcons[t.category] || '💠';
-          return `<div class="transaction ${t.type}" data-id="${t.id}">
-            <div class="transaction-info">
-              <div class="transaction-category">${icon} ${t.category}</div>
-              <div class="transaction-description">${t.description}</div>
-              <div class="transaction-date">${t.date}</div>
-            </div>
-            <div class="transaction-right">
-              <div class="transaction-amount">₹${t.amount.toLocaleString()}</div>
-              <button class="delete-btn" title="Delete" onclick="window.expenseTracker.showDeleteModal('${t.id}')">×</button>
-            </div>
-          </div>`;
-        }).join('');
-      }
-
-      updateChart(){
-        const tx = this.getCurrentMonthTransactions();
-        const expenseTx = tx.filter(t=>t.type==='expense');
-        const container = document.getElementById('expenseBreakdown');
-        if(expenseTx.length===0){
-          container.innerHTML = '<div class="no-data">No expense data for this month. Add some expenses to see the breakdown!</div>';
-          if(this.chart){ this.chart.destroy(); this.chart=null; }
-          return;
-        }
-        const byCat = {};
-        expenseTx.forEach(t=>{ byCat[t.category]=(byCat[t.category]||0)+t.amount; });
-        const totalExpenses = Object.values(byCat).reduce((s,v)=>s+v,0);
-        const totalIncome = tx.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
-
-        container.innerHTML = Object.entries(byCat).sort(([,a],[,b])=>b-a).map(([cat,amt])=>{
-          const expPct = totalExpenses>0 ? ((amt/totalExpenses)*100).toFixed(1) : 0;
-          const incPct = totalIncome>0 ? ((amt/totalIncome)*100).toFixed(1) : 0;
-          const icon = this.categoryIcons[cat] || '🔖';
-          return `<div class="breakdown-item">
-            <div class="breakdown-left">
-              <div class="breakdown-icon">${icon}</div>
-              <div class="breakdown-info">
-                <h4>${cat}</h4>
-                <div class="breakdown-percentage">${expPct}% of expenses | ${incPct}% of income</div>
-              </div>
-            </div>
-            <div class="breakdown-amount">₹${amt.toLocaleString()}</div>
-          </div>`;
-        }).join('');
-
-        const ctx = document.getElementById('expenseChart').getContext('2d');
-        const labels = Object.keys(byCat);
-        const amounts = Object.values(byCat);
-        const percentages = amounts.map(a=> totalExpenses>0 ? ((a/totalExpenses)*100).toFixed(1) : 0);
-        const colors = ['#FF6384','#36A2EB','#FFCE56','#4BC0C0','#9966FF','#FF9F40','#FF6B6B','#4ECDC4','#45B7AF','#8E44AD'];
-
-        if(this.chart) this.chart.destroy();
-        this.chart = new Chart(ctx,{
-          type:'doughnut',
-          data:{
-            labels: labels.map((c,i)=>`${c} (${percentages[i]}%)`),
-            datasets:[{ data: amounts, backgroundColor: colors.slice(0,labels.length), borderColor:'#fff', borderWidth:3 }]
-          },
-          options:{
-            responsive:true, maintainAspectRatio:false, cutout: '58%',
-            plugins:{
-              legend:{ position:'bottom', labels:{ usePointStyle:true, padding:16, font:{size:11} } }
-            }
-          }
-        });
-      }
-
-      // Data aggregation for PDF
-      getAllMonthsSummary(){
-        const monthly = {};
-        this.allTransactions.forEach(t=>{
-          const d = new Date(t.timestamp);
-          const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-          if(!monthly[key]){
-            monthly[key] = {
-              month: `${this.monthNames[d.getMonth()]} ${d.getFullYear()}`,
-              monthKey:key, income:0, expenses:0, balance:0, transactionCount:0,
-              incomeTransactions:[], expenseTransactions:[], categories:{}
-            };
-          }
-          const m = monthly[key];
-          m.transactionCount++;
-          if(t.type==='income'){ m.income+=t.amount; m.incomeTransactions.push(t); }
-          else { m.expenses+=t.amount; m.expenseTransactions.push(t); m.categories[t.category]=(m.categories[t.category]||0)+t.amount; }
-          m.balance = m.income - m.expenses;
-        });
-        return Object.entries(monthly).sort(([a],[b])=> b.localeCompare(a)).map(([,v])=>v);
-      }
-
-      // Clean PDF text
-      sanitizeText(txt){
-        if(!txt) return '';
-        return String(txt)
-          .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu,'')
-          .replace(/\s+/g,' ')
-          .trim();
-      }
-      clipDescription(txt, n=60){
-        const t = this.sanitizeText(txt||'');
-        return t.length>n ? t.slice(0,n)+'…' : t;
-      }
-
-      async generateEnhancedPDF(){
-        const button = document.getElementById('generateData');
-        const original = button.innerHTML; button.classList.add('loading'); button.disabled = true;
-
-        try{
-          const { jsPDF } = window.jspdf;
-          const doc = new jsPDF('p','pt','a4');
-          const pageWidth = doc.internal.pageSize.getWidth();
-          const pageHeight = doc.internal.pageSize.getHeight();
-          const left = 40, right = 40, usableWidth = pageWidth-left-right;
-          let y = 50;
-
-          const monthlyData = this.getAllMonthsSummary();
-
-          // Title
-          doc.setFont('helvetica','bold'); doc.setFontSize(20); doc.setTextColor(44,62,80);
-          doc.text('Student Expense Tracker', pageWidth/2, y, {align:'center'});
-
-          y += 18; doc.setFont('helvetica','normal'); doc.setFontSize(12); doc.setTextColor(100,100,100);
-          doc.text('Comprehensive Financial Report', pageWidth/2, y, {align:'center'});
-
-          y += 20; doc.setFontSize(10);
-          doc.text(`Generated on: ${new Date().toLocaleDateString('en-IN',{weekday:'long',year:'numeric',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'})}`,
-                   pageWidth/2, y, {align:'center'});
-
-          // Executive Summary
-          y += 30; doc.setDrawColor(220,220,220); doc.setFillColor(248,249,250);
-          doc.roundedRect(left, y, usableWidth, 80, 6,6,'FD');
-
-          const totalIncome = monthlyData.reduce((s,m)=>s+m.income,0);
-          const totalExpenses = monthlyData.reduce((s,m)=>s+m.expenses,0);
-          const totalBalance = totalIncome-totalExpenses;
-          const totalTx = monthlyData.reduce((s,m)=>s+m.transactionCount,0);
-
-          y += 20; doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(52,73,94);
-          doc.text('Executive Summary', pageWidth/2, y, {align:'center'});
-
-          y += 16; doc.setFont('helvetica','normal'); doc.setFontSize(11); doc.setTextColor(0,0,0);
-          const lines = [
-            `Total Income: ₹${totalIncome.toLocaleString('en-IN')}    Total Expenses: ₹${totalExpenses.toLocaleString('en-IN')}`,
-            `Net Balance: ₹${totalBalance.toLocaleString('en-IN')}    Total Transactions: ${totalTx}`,
-            `Active Months: ${monthlyData.length}    Avg Monthly Expense: ₹${monthlyData.length? Math.round(totalExpenses/monthlyData.length).toLocaleString('en-IN'):0}`
-          ];
-          lines.forEach(line=>{ y += 14; doc.text(line, pageWidth/2, y, {align:'center', maxWidth: usableWidth-20}); });
-
-          // Monthly sections
-          doc.addPage(); y = 50;
-
-          monthlyData.forEach((m,idx)=>{
-            if(y>pageHeight-220){ doc.addPage(); y=50; }
-            // Month Header
-            doc.setFillColor(240,244,248); doc.setDrawColor(220,220,220);
-            doc.rect(left, y-18, usableWidth, 28, 'F');
-
-            doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(44,62,80);
-            doc.text(this.sanitizeText(m.month), left+10, y);
-            doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(100,100,100);
-            doc.text(`Balance: ₹${m.balance.toLocaleString('en-IN')}   Transactions: ${m.transactionCount}`, pageWidth-right-10, y, {align:'right'});
-
-            y += 18;
-
-            // Overview table
-            doc.autoTable({
-              startY:y,
-              head:[['Item','Amount']],
-              body:[
-                ['Total Income', `₹${m.income.toLocaleString('en-IN')}`],
-                ['Total Expenses', `₹${m.expenses.toLocaleString('en-IN')}`],
-                ['Net Balance', `₹${m.balance.toLocaleString('en-IN')}`],
-                ['Transactions', `${m.transactionCount}`]
-              ],
-              theme:'grid',
-              styles:{ fontSize:9, cellPadding:4 },
-              headStyles:{ fillColor:[52,73,94], textColor:255, fontStyle:'bold' },
-              alternateRowStyles:{ fillColor:[248,249,250] },
-              columnStyles:{ 0:{cellWidth:usableWidth*.6}, 1:{cellWidth:usableWidth*.4, halign:'right', fontStyle:'bold'} },
-              margin:{ left, right }
-            });
-            y = doc.lastAutoTable.finalY + 14;
-
-            // Income Details
-            if(m.incomeTransactions.length>0){
-              if(y>pageHeight-100){ doc.addPage(); y=50; }
-              doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(39,174,96);
-              doc.text('Income Details', left, y); y += 8;
-
-              const incomeRows = m.incomeTransactions.sort((a,b)=>b.timestamp-a.timestamp).map(t=>[
-                new Date(t.timestamp).toLocaleDateString('en-IN'),
-                this.sanitizeText(t.category),
-                this.clipDescription(t.description, 60),
-                `₹${t.amount.toLocaleString('en-IN')}`
-              ]);
-
-              doc.autoTable({
-                startY:y,
-                head:[['Date','Category','Description','Amount']],
-                body:incomeRows,
-                theme:'striped',
-                styles:{ fontSize:8, cellPadding:3 },
-                headStyles:{ fillColor:[39,174,96], textColor:255, fontStyle:'bold' },
-                alternateRowStyles:{ fillColor:[248,249,250] },
-                columnStyles:{ 0:{cellWidth:70}, 1:{cellWidth:110}, 2:{cellWidth:usableWidth-70-110-70}, 3:{cellWidth:70, halign:'right', fontStyle:'bold'} },
-                margin:{ left, right }
-              });
-              y = doc.lastAutoTable.finalY + 12;
-            }
-
-            // Expense Details
-            if(m.expenseTransactions.length>0){
-              if(y>pageHeight-100){ doc.addPage(); y=50; }
-              doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(231,76,60);
-              doc.text('Expense Details', left, y); y += 8;
-
-              const expenseRows = m.expenseTransactions.sort((a,b)=>b.timestamp-a.timestamp).map(t=>[
-                new Date(t.timestamp).toLocaleDateString('en-IN'),
-                this.sanitizeText(t.category),
-                this.clipDescription(t.description, 60),
-                `₹${t.amount.toLocaleString('en-IN')}`
-              ]);
-
-              doc.autoTable({
-                startY:y,
-                head:[['Date','Category','Description','Amount']],
-                body:expenseRows,
-                theme:'striped',
-                styles:{ fontSize:8, cellPadding:3 },
-                headStyles:{ fillColor:[231,76,60], textColor:255, fontStyle:'bold' },
-                alternateRowStyles:{ fillColor:[248,249,250] },
-                columnStyles:{ 0:{cellWidth:70}, 1:{cellWidth:110}, 2:{cellWidth:usableWidth-70-110-70}, 3:{cellWidth:70, halign:'right', fontStyle:'bold'} },
-                margin:{ left, right }
-              });
-              y = doc.lastAutoTable.finalY + 12;
-            }
-
-            // Category Breakdown (monthly)
-            if(Object.keys(m.categories).length>0){
-              if(y>pageHeight-100){ doc.addPage(); y=50; }
-              doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(155,89,182);
-              doc.text('Expense Categories', left, y); y += 8;
-
-              const catRows = Object.entries(m.categories).sort(([,a],[,b])=>b-a).map(([cat,amt])=>{
-                const pct = m.expenses>0 ? ((amt/m.expenses)*100).toFixed(1) : 0;
-                return [ this.sanitizeText(cat), `₹${amt.toLocaleString('en-IN')}`, `${pct}%` ];
-              });
-
-              doc.autoTable({
-                startY:y,
-                head:[['Category','Amount','Percentage']],
-                body:catRows,
-                theme:'grid',
-                styles:{ fontSize:9, cellPadding:3 },
-                headStyles:{ fillColor:[155,89,182], textColor:255, fontStyle:'bold' },
-                alternateRowStyles:{ fillColor:[248,249,250] },
-                columnStyles:{ 0:{cellWidth:usableWidth*.5}, 1:{cellWidth:usableWidth*.25, halign:'right', fontStyle:'bold'}, 2:{cellWidth:usableWidth*.25, halign:'center'} },
-                margin:{ left, right }
-              });
-              y = doc.lastAutoTable.finalY + 18;
-            }
-
-            // Separator
-            if(idx<monthlyData.length-1){
-              doc.setDrawColor(210,210,210); doc.setLineWidth(.6);
-              doc.line(left, y, pageWidth-right, y); y += 14;
-            }
-          });
-
-          // Overall Category Analysis
-          if(monthlyData.length>0){
-            doc.addPage(); y = 50;
-            doc.setFont('helvetica','bold'); doc.setFontSize(16); doc.setTextColor(52,73,94);
-            doc.text('Overall Expense Analysis', pageWidth/2, y, {align:'center'}); y+=16;
-
-            const allCat = {}; let totalExp = 0;
-            monthlyData.forEach(m=>{
-              totalExp += m.expenses;
-              Object.entries(m.categories).forEach(([cat,amt])=>{
-                if(!allCat[cat]) allCat[cat] = { total:0, months:0 };
-                allCat[cat].total += amt; allCat[cat].months += 1;
-              });
-            });
-
-            if(Object.keys(allCat).length>0){
-              const rows = Object.entries(allCat).sort(([,a],[,b])=>b.total-a.total).map(([cat,data])=>{
-                const pct = totalExp>0 ? ((data.total/totalExp)*100).toFixed(1) : 0;
-                const avg = Math.round(data.total / data.months).toLocaleString('en-IN');
-                return [ this.sanitizeText(cat), `₹${data.total.toLocaleString('en-IN')}`, `${pct}%`, `${data.months}`, `₹${avg}` ];
-              });
-
-              doc.autoTable({
-                startY:y,
-                head:[['Category','Total Amount','% of Total','Active Months','Avg/Month']],
-                body:rows,
-                theme:'grid',
-                styles:{ fontSize:10, cellPadding:3 },
-                headStyles:{ fillColor:[52,73,94], textColor:255, fontStyle:'bold' },
-                alternateRowStyles:{ fillColor:[248,249,250] },
-                columnStyles:{
-                  0:{cellWidth:usableWidth*.35},
-                  1:{cellWidth:usableWidth*.2, halign:'right', fontStyle:'bold'},
-                  2:{cellWidth:usableWidth*.15, halign:'center'},
-                  3:{cellWidth:usableWidth*.15, halign:'center'},
-                  4:{cellWidth:usableWidth*.15, halign:'right'}
-                },
-                margin:{ left, right }
-              });
-            }
-          }
-
-          // Footer (page numbers; timestamp only on page 1)
-          const count = doc.internal.getNumberOfPages();
-          for(let i=1;i<=count;i++){
-            doc.setPage(i);
-            doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(100,100,100);
-            doc.text(`Student Expense Tracker | Page ${i} of ${count}`, pageWidth/2, pageHeight-16, {align:'center'});
-            if(i===1){
-              doc.text(`Generated: ${new Date().toLocaleString('en-IN')}`, pageWidth-40, pageHeight-16, {align:'right'});
-            }
-          }
-
-          const fileName = `detailed-expense-report-${new Date().toISOString().split('T')[0]}.pdf`;
-          doc.save(fileName);
-          this.showSuccessMessage('Detailed PDF generated!');
-        } catch(e){
-          console.error(e);
-          alert('Error generating PDF. Please try again.');
-        } finally {
-          button.classList.remove('loading'); button.disabled=false; button.innerHTML = original;
-        }
-      }
-    }
-
-    let expenseTracker;
-    document.addEventListener('DOMContentLoaded', ()=>{
-      expenseTracker = new ExpenseTracker();
-      window.expenseTracker = expenseTracker;
-    });
-    window.addEventListener('beforeunload', ()=>{
-      if(expenseTracker && expenseTracker.allTransactions.length>0) expenseTracker.saveData();
-    });
-  </script>
+    </script>
 </body>
 </html>
