@@ -279,7 +279,6 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, getDoc, deleteDoc, onSnapshot, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -292,11 +291,10 @@
         };
 
         const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
         const db = getFirestore(app);
         const appId = 'link-shortner-7a8ca';
 
-        let currentUser = null;
+        let currentUserId = null;
         let linkToDelete = null;
 
         const els = {
@@ -315,25 +313,28 @@
             manualLink: document.getElementById('manual-link')
         };
 
+        // --- LOCAL USER ID GENERATION ---
+        function getLocalUserId() {
+            let id = localStorage.getItem('nebula_user_id');
+            if (!id) {
+                id = 'user_' + generateId(8);
+                localStorage.setItem('nebula_user_id', id);
+            }
+            return id;
+        }
+
         async function init() {
+            // Set User ID from LocalStorage instead of Firebase Auth
+            currentUserId = getLocalUserId();
+
             const params = new URLSearchParams(window.location.search);
             const id = params.get('id');
             if (id) startRedirect(id);
 
             try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-
-                onAuthStateChanged(auth, (user) => {
-                    if (user) {
-                        currentUser = user;
-                        loadHistory();
-                        if (id) executeRedirect(id);
-                    }
-                });
+                // Directly load data without waiting for auth
+                loadHistory();
+                if (id) executeRedirect(id);
             } catch (e) {
                 showError(e);
             }
@@ -366,8 +367,7 @@
 
         els.form.addEventListener('submit', async (e) => {
             e.preventDefault();
-            if (!currentUser) return;
-
+            
             const btnOriginal = els.submitBtn.innerHTML;
             els.submitBtn.innerHTML = '<div class="spinner"></div>';
             els.submitBtn.disabled = true;
@@ -392,7 +392,7 @@
                     id: alias,
                     longUrl: long,
                     shortUrl: shortUrl,
-                    author: currentUser.uid,
+                    author: currentUserId, // Use LocalStorage ID
                     createdAt: Date.now()
                 });
 
@@ -405,7 +405,7 @@
 
             } catch (e) {
                 console.error(e);
-                showToast("Deployment Failed");
+                showError(e);
             } finally {
                 els.submitBtn.innerHTML = btnOriginal;
                 els.submitBtn.disabled = false;
@@ -427,13 +427,12 @@
                 }
 
                 links.forEach(link => {
-                    const isMine = link.author === currentUser.uid;
+                    // Compare with LocalStorage ID
+                    const isMine = link.author === currentUserId;
                     let domain = '...';
                     try { domain = new URL(link.longUrl).hostname; } catch {}
 
                     const div = document.createElement('div');
-                    // Fix for mobile: changed default opacity to 100 (always visible)
-                    // and md:opacity-0 (hidden on desktop unless hovered)
                     div.className = `glass-panel p-4 rounded-xl flex items-center justify-between group hover:border-white/20 transition-all ${isMine ? 'border-l-2 border-l-violet-500' : 'opacity-70'}`;
                     
                     div.innerHTML = `
@@ -520,10 +519,10 @@
             
             txt.textContent = error.message;
             
-            if(error.code === 'auth/configuration-not-found') {
-                sol.innerHTML = "<strong>Fix:</strong> Enable Anonymous Auth in Firebase Console.";
+            if(error.code === 'permission-denied') {
+                 sol.innerHTML = "<strong>Fix:</strong> Firestore Rules might be blocking public access. Set rules to Test Mode.";
             } else {
-                sol.textContent = `Code: ${error.code}`;
+                 sol.textContent = `Code: ${error.code}`;
             }
             
             ov.classList.remove('hidden');
