@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instant Host - Modern</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+    <!-- FontAwesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- PrismJS (VS Code Dark Theme) -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-vsc-dark-plus.min.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markup.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-css.min.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
+        :root {
+            --bg-dark: #0f172a;
+            --panel-bg: #1e293b;
+            --accent: #3b82f6;
+            --accent-glow: 0 0 20px rgba(59, 130, 246, 0.3);
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: var(--bg-dark);
+            color: #e2e8f0;
+            overflow: hidden; /* Prevent body scroll */
+        }
+
+        /* Smooth Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+        /* Animations */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+
+        /* Editor Stack Logic */
+        .editor-stack {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #1e1e1e; /* VS Code bg color */
+        }
+
+        #code-input, #code-highlight {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            padding: 1.5rem;
+            margin: 0;
+            border: none;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            white-space: pre;
+            overflow: auto;
+            background: transparent;
+            outline: none;
+            tab-size: 4;
+        }
+
+        #code-highlight {
+            z-index: 1;
+            pointer-events: none;
+            color: #e2e8f0;
+        }
+
+        #code-input {
+            z-index: 2;
+            color: transparent;
+            caret-color: #3b82f6;
+        }
+
+        /* Prism Overrides */
+        code[class*="language-"], pre[class*="language-"] {
+            font-family: 'JetBrains Mono', monospace !important;
+            font-size: 14px !important;
+            line-height: 1.6 !important;
+            background: transparent !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            text-shadow: none !important;
+        }
+
+        /* Mobile View Handling */
+        .tab-btn.active {
+            background-color: #3b82f6;
+            color: white;
+        }
+        .tab-btn {
+            border-bottom: 2px solid transparent;
+        }
+        .tab-btn:hover:not(.active) {
+            background-color: rgba(30, 41, 59, 0.5);
+            color: #cbd5e1;
+        }
+
+        /* Fullscreen Preview Mode */
+        .mode-preview-only nav { display: none; }
+        .mode-preview-only .global-tabs { display: none; } /* Hide tabs in shared view */
+        .mode-preview-only #main-layout { display: none; }
+        .mode-preview-only #fullscreen-container { display: block; height: 100vh; }
+    </style>
+</head>
+<body id="app-body" class="h-screen flex flex-col">
+
+    <!-- Header / Navbar -->
+    <nav class="h-14 bg-slate-900/80 backdrop-blur-md border-b border-slate-800 flex items-center justify-between px-4 sm:px-6 z-50">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
+                <i class="fa-solid fa-bolt text-white text-sm"></i>
+            </div>
+            <h1 class="font-bold text-lg text-white tracking-tight">Instant<span class="text-blue-500">Host</span></h1>
+        </div>
+        
+        <div class="flex items-center gap-3">
+            <button id="reset-btn" class="hidden sm:flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm font-medium px-3 py-1.5 rounded-md hover:bg-slate-800">
+                <i class="fa-solid fa-rotate-right"></i> Reset
+            </button>
+            <button id="deploy-btn" class="group relative bg-white text-slate-900 px-5 py-2 rounded-full text-sm font-bold hover:bg-blue-50 transition-all duration-300 shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_25px_rgba(59,130,246,0.4)] flex items-center gap-2 overflow-hidden">
+                <span class="relative z-10">Deploy & Share</span>
+                <i class="fa-solid fa-paper-plane relative z-10 group-hover:translate-x-1 transition-transform"></i>
+                <div class="absolute inset-0 bg-gradient-to-r from-blue-400 to-indigo-400 opacity-0 group-hover:opacity-10 transition-opacity"></div>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Global Tabs (Visible on ALL devices) -->
+    <div class="flex border-b border-slate-800 bg-slate-900 global-tabs">
+        <button id="tab-code" class="flex-1 py-3 text-sm font-medium text-slate-400 tab-btn active transition-all">
+            <i class="fa-solid fa-code mr-2"></i> Code
+        </button>
+        <button id="tab-preview" class="flex-1 py-3 text-sm font-medium text-slate-400 tab-btn transition-all">
+            <i class="fa-solid fa-eye mr-2"></i> Preview
+        </button>
+    </div>
+
+    <!-- Main Layout (Unified View) -->
+    <main id="main-layout" class="flex-1 flex overflow-hidden relative">
+        
+        <!-- Editor Pane (Full Width) -->
+        <div id="pane-editor" class="w-full h-full flex flex-col bg-[#1e1e1e]">
+            <!-- File Tab -->
+            <div class="h-9 bg-[#1e1e1e] flex items-center px-4 border-b border-slate-800">
+                <div class="flex items-center gap-2 px-3 py-1 bg-[#2d2d2d] rounded-t-sm text-xs text-blue-400 border-t border-blue-500/50">
+                    <i class="fa-brands fa-html5"></i>
+                    <span class="font-mono text-slate-200">index.html</span>
+                </div>
+            </div>
+
+            <!-- Code Editor Stack -->
+            <div class="editor-stack flex-1 relative">
+                <pre id="code-highlight" aria-hidden="true"><code class="language-html" id="code-content"></code></pre>
+                <textarea id="code-input" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="<!-- Start coding here... -->"></textarea>
+            </div>
+        </div>
+
+        <!-- Preview Pane (Hidden by default, toggled via tabs) -->
+        <div id="pane-preview" class="hidden w-full h-full flex-col bg-white">
+            <!-- Browser Bar -->
+            <div class="h-9 bg-slate-100 border-b border-slate-200 flex items-center px-3 gap-2 flex-none">
+                <div class="flex gap-1.5">
+                    <div class="w-2.5 h-2.5 rounded-full bg-red-400/80"></div>
+                    <div class="w-2.5 h-2.5 rounded-full bg-amber-400/80"></div>
+                    <div class="w-2.5 h-2.5 rounded-full bg-emerald-400/80"></div>
+                </div>
+                <div class="flex-1 bg-white mx-3 h-5 rounded border border-slate-200 flex items-center px-2">
+                    <i class="fa-solid fa-lock text-[8px] text-slate-400 mr-1.5"></i>
+                    <span class="text-[10px] text-slate-500 font-mono">localhost:3000</span>
+                </div>
+                <i class="fa-solid fa-rotate-right text-slate-400 text-xs cursor-pointer hover:text-slate-600"></i>
+            </div>
+            
+            <iframe id="preview-frame" class="w-full flex-1 border-none bg-white"></iframe>
+        </div>
+
+    </main>
+
+    <!-- Fullscreen Preview Container (For Shared View) -->
+    <div id="fullscreen-container" class="hidden w-full h-full bg-white">
+        <iframe id="fullscreen-frame" class="w-full h-full border-none"></iframe>
+    </div>
+
+    <!-- Success Modal -->
+    <div id="share-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-md shadow-2xl animate-fade-in relative overflow-hidden">
+            <!-- Background Glow -->
+            <div class="absolute -top-10 -right-10 w-32 h-32 bg-blue-500/20 rounded-full blur-3xl pointer-events-none"></div>
+
+            <div class="flex justify-between items-center mb-5">
+                <h3 class="text-xl font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-circle-check text-emerald-500"></i>
+                    Published
+                </h3>
+                <button id="close-modal" class="text-slate-500 hover:text-white transition-colors w-8 h-8 rounded-full hover:bg-slate-800 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <p class="text-slate-400 text-sm mb-4">Your site is live! Anyone with this link can view it.</p>
+            
+            <div class="bg-slate-950 border border-slate-800 rounded-xl p-1.5 flex items-center gap-2 mb-6 shadow-inner">
+                <input id="share-url" readonly type="text" class="bg-transparent text-blue-400 text-xs w-full focus:outline-none font-mono px-3 py-2" value="...">
+                <button id="copy-btn" class="bg-slate-800 hover:bg-slate-700 text-white px-3 py-2 rounded-lg transition-all text-xs font-medium border border-slate-700">
+                    Copy
+                </button>
+            </div>
+
+            <div class="flex gap-3">
+                <a id="view-live-btn" href="#" target="_blank" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-2.5 rounded-xl text-center font-semibold text-sm transition-all shadow-lg shadow-blue-600/20">
+                    Open in New Tab <i class="fa-solid fa-arrow-up-right-from-square ml-1 text-xs"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 bg-slate-800 border border-slate-700 text-white px-4 py-3 rounded-xl shadow-2xl transform translate-y-20 opacity-0 transition-all duration-300 flex items-center gap-3 z-[110]">
+        <div class="w-2 h-2 rounded-full bg-emerald-500"></div>
+        <span id="toast-msg" class="text-sm font-medium">Notification</span>
+    </div>
+
+    <script>
+        // --- DOM Elements ---
+        const codeInput = document.getElementById('code-input');
+        const codeHighlight = document.getElementById('code-content');
+        const previewFrame = document.getElementById('preview-frame');
+        const fullscreenFrame = document.getElementById('fullscreen-frame');
+        const appBody = document.getElementById('app-body');
+        const mainLayout = document.getElementById('main-layout');
+        const fullscreenContainer = document.getElementById('fullscreen-container');
+        
+        const deployBtn = document.getElementById('deploy-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const shareModal = document.getElementById('share-modal');
+        const shareUrlInput = document.getElementById('share-url');
+        const closeModalBtn = document.getElementById('close-modal');
+        const copyBtn = document.getElementById('copy-btn');
+        const viewLiveBtn = document.getElementById('view-live-btn');
+        
+        // Tabs
+        const tabCode = document.getElementById('tab-code');
+        const tabPreview = document.getElementById('tab-preview');
+        const paneEditor = document.getElementById('pane-editor');
+        const panePreview = document.getElementById('pane-preview');
+
+        // --- Default Modern Template ---
+        const DEFAULT_CODE = `<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://cdn.tailwindcss.com"><\/script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Outfit', sans-serif; }
+        .glass {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900 min-h-screen text-white flex items-center justify-center p-6">
+
+    <div class="glass max-w-md w-full rounded-2xl p-8 shadow-2xl transform hover:scale-105 transition-transform duration-500">
+        <div class="flex items-center gap-3 mb-6">
+            <div class="w-3 h-3 rounded-full bg-red-400"></div>
+            <div class="w-3 h-3 rounded-full bg-yellow-400"></div>
+            <div class="w-3 h-3 rounded-full bg-green-400"></div>
+        </div>
+        
+        <h1 class="text-4xl font-bold mb-2 bg-gradient-to-r from-blue-300 to-purple-300 bg-clip-text text-transparent">
+            Hello World.
+        </h1>
+        
+        <p class="text-slate-300 mb-8 leading-relaxed">
+            This is a live preview. Switch to the Code tab to edit this card and watch it update instantly.
+        </p>
+        
+        <button class="w-full bg-white text-indigo-900 font-bold py-3 rounded-xl hover:bg-opacity-90 transition-opacity">
+            Get Started
+        </button>
+    </div>
+
+</body>
+</html>`;
+
+        // --- Syntax Highlighting Logic ---
+        function updateHighlighting(text) {
+            let html = text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+
+            if (html[html.length - 1] === "\n") html += " "; 
+
+            codeHighlight.innerHTML = html;
+            Prism.highlightElement(codeHighlight);
+        }
+
+        function syncScroll() {
+            codeHighlight.parentElement.scrollTop = codeInput.scrollTop;
+            codeHighlight.parentElement.scrollLeft = codeInput.scrollLeft;
+        }
+
+        codeInput.addEventListener('scroll', syncScroll);
+
+        // --- Compression (Pako) ---
+        function compressCode(text) {
+            try {
+                const textEncoder = new TextEncoder();
+                const bytes = textEncoder.encode(text);
+                const compressed = pako.deflate(bytes, { level: 9 });
+                const binaryString = uint8ToBinaryString(compressed);
+                return btoa(binaryString).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+            } catch (e) { return null; }
+        }
+
+        function decompressCode(encoded) {
+            try {
+                const str = encoded.replace(/-/g, '+').replace(/_/g, '/');
+                const binaryString = atob(str);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                const decompressed = pako.inflate(bytes);
+                return new TextDecoder().decode(decompressed);
+            } catch (e) { return null; }
+        }
+
+        function uint8ToBinaryString(u8Arr) {
+            const CHUNK_SIZE = 0x8000;
+            let index = 0;
+            let length = u8Arr.length;
+            let result = '';
+            while (index < length) {
+                let slice = u8Arr.subarray(index, Math.min(index + CHUNK_SIZE, length));
+                result += String.fromCharCode.apply(null, slice);
+                index += CHUNK_SIZE;
+            }
+            return result;
+        }
+
+        // --- App Logic ---
+
+        function init() {
+            const hash = window.location.hash;
+            
+            if (hash && hash.startsWith('#v2=')) {
+                try {
+                    const compressed = hash.substring(4);
+                    const decompressed = decompressCode(compressed);
+                    
+                    if (decompressed) {
+                        enterSharedMode(decompressed);
+                    } else {
+                        enterEditorMode(DEFAULT_CODE);
+                    }
+                } catch (e) {
+                    enterEditorMode(DEFAULT_CODE);
+                }
+            } else {
+                enterEditorMode(DEFAULT_CODE);
+            }
+        }
+
+        function enterEditorMode(code) {
+            appBody.classList.remove('mode-preview-only');
+            if (code) {
+                codeInput.value = code;
+                updateHighlighting(code);
+                updateEditorPreview();
+            }
+        }
+
+        function enterSharedMode(code) {
+            appBody.classList.add('mode-preview-only');
+            fullscreenFrame.srcdoc = code;
+            // Also populate editor in case they go back
+            codeInput.value = code;
+            updateHighlighting(code);
+        }
+
+        function updateEditorPreview() {
+            previewFrame.srcdoc = codeInput.value;
+        }
+
+        function deploy() {
+            const content = codeInput.value.trim();
+            if(!content) return showToast("Code is empty!", true);
+
+            const originalBtn = deployBtn.innerHTML;
+            deployBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Processing`;
+
+            setTimeout(() => {
+                const compressed = compressCode(content);
+                if (compressed) {
+                    const url = `${window.location.origin}${window.location.pathname}#v2=${compressed}`;
+                    showShareModal(url);
+                } else {
+                    showToast("Error compressing code", true);
+                }
+                deployBtn.innerHTML = originalBtn;
+            }, 300);
+        }
+
+        function showShareModal(url) {
+            shareUrlInput.value = url;
+            viewLiveBtn.href = url;
+            shareModal.classList.remove('hidden');
+        }
+
+        function showToast(msg, isError = false) {
+            const toast = document.getElementById('toast');
+            const msgEl = document.getElementById('toast-msg');
+            msgEl.textContent = msg;
+            toast.className = `fixed bottom-6 right-6 border px-4 py-3 rounded-xl shadow-2xl transform transition-all duration-300 flex items-center gap-3 z-[110] translate-y-0 opacity-100 ${isError ? 'bg-red-900 border-red-700 text-red-100' : 'bg-slate-800 border-slate-700 text-white'}`;
+            
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+
+        // --- Event Listeners ---
+
+        deployBtn.addEventListener('click', deploy);
+
+        resetBtn.addEventListener('click', () => {
+            if(confirm("Reset to default template?")) {
+                codeInput.value = DEFAULT_CODE;
+                updateHighlighting(DEFAULT_CODE);
+                updateEditorPreview();
+            }
+        });
+
+        // Modal interactions
+        closeModalBtn.addEventListener('click', () => shareModal.classList.add('hidden'));
+        shareModal.addEventListener('click', (e) => {
+            if(e.target === shareModal) shareModal.classList.add('hidden');
+        });
+
+        copyBtn.addEventListener('click', () => {
+            shareUrlInput.select();
+            document.execCommand('copy');
+            copyBtn.textContent = "Copied!";
+            setTimeout(() => copyBtn.textContent = "Copy", 2000);
+        });
+
+        // Editor Typing
+        let debounceTimer;
+        codeInput.addEventListener('input', () => {
+            updateHighlighting(codeInput.value);
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(updateEditorPreview, 500);
+        });
+
+        // Tab Handling
+        codeInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                const start = codeInput.selectionStart;
+                const end = codeInput.selectionEnd;
+                const spaces = "    ";
+                codeInput.value = codeInput.value.substring(0, start) + spaces + codeInput.value.substring(end);
+                codeInput.selectionStart = codeInput.selectionEnd = start + spaces.length;
+                updateHighlighting(codeInput.value);
+            }
+        });
+
+        // Tabs Switching (Global)
+        tabCode.addEventListener('click', () => {
+            tabCode.classList.add('active');
+            tabPreview.classList.remove('active');
+            paneEditor.classList.remove('hidden');
+            panePreview.classList.add('hidden');
+            panePreview.classList.remove('flex'); // Ensure flex is removed
+        });
+
+        tabPreview.addEventListener('click', () => {
+            tabPreview.classList.add('active');
+            tabCode.classList.remove('active');
+            paneEditor.classList.add('hidden');
+            panePreview.classList.remove('hidden');
+            panePreview.classList.add('flex'); // Add flex back for layout
+        });
+
+        // Init
+        init();
+        window.addEventListener('hashchange', init);
+
+    </script>
+</body>
+</html>
