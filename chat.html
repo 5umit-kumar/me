@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Private Chat + QR</title>
+    <title>Private Chat + Typing Indicator</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -54,6 +54,18 @@
             100% { transform: scale(2); opacity: 0; }
         }
         .ring-animate { animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite; }
+
+        /* Typing Bounce Animation */
+        .typing-dot {
+            animation: typingBounce 1.4s infinite ease-in-out both;
+        }
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        
+        @keyframes typingBounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900 h-[100dvh] overflow-hidden">
@@ -84,14 +96,20 @@
         const IconSpeakerOff = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>;
 
         // --- CONFIGURATION ---
+        // UPDATE: Added more public STUN servers to help with "across device" connections.
+        // NOTE: For 100% success on restricted corporate networks or 4G, you would typically need a PAID TURN server here.
         const PEER_CONFIG = {
             host: '0.peerjs.com',
             port: 443,
             secure: true,
+            pingInterval: 5000,
             config: {
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun2.l.google.com:19302' },
+                    { urls: 'stun:stun3.l.google.com:19302' },
+                    { urls: 'stun:stun4.l.google.com:19302' }
                 ]
             }
         };
@@ -102,6 +120,15 @@
                 <div className="w-full max-w-md bg-white/80 backdrop-blur-2xl rounded-[32px] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] border border-white/50 overflow-hidden relative transition-all duration-500">
                     {children}
                 </div>
+            </div>
+        );
+
+        // --- TYPING INDICATOR COMPONENT ---
+        const TypingIndicator = () => (
+            <div className="flex items-center gap-1 px-3 py-2 bg-slate-100 rounded-full w-fit">
+                <div className="w-1.5 h-1.5 bg-slate-400 rounded-full typing-dot"></div>
+                <div className="w-1.5 h-1.5 bg-slate-400 rounded-full typing-dot"></div>
+                <div className="w-1.5 h-1.5 bg-slate-400 rounded-full typing-dot"></div>
             </div>
         );
 
@@ -119,12 +146,13 @@
             const [message, setMessage] = useState('');
             const [chatHistory, setChatHistory] = useState([]);
             const [showEmoji, setShowEmoji] = useState(false);
+            const [peerIsTyping, setPeerIsTyping] = useState(false);
             
             // Connection State
             const [status, setStatus] = useState('');
             const [error, setError] = useState('');
             const [isConnected, setIsConnected] = useState(false);
-            const [isBusy, setIsBusy] = useState(false); // New: Prevents double clicking
+            const [isBusy, setIsBusy] = useState(false); 
 
             // Call State
             const [incomingCall, setIncomingCall] = useState(null);
@@ -132,8 +160,8 @@
             const [callMode, setCallMode] = useState(null); // 'voice', 'video', 'screen'
             const [myStream, setMyStream] = useState(null);
             const [remoteStream, setRemoteStream] = useState(null);
-            const [isMuted, setIsMuted] = useState(false); // Mic
-            const [isSpeakerMuted, setIsSpeakerMuted] = useState(false); // Remote Audio
+            const [isMuted, setIsMuted] = useState(false); 
+            const [isSpeakerMuted, setIsSpeakerMuted] = useState(false); 
 
             // Refs
             const peerRef = useRef(null);
@@ -144,6 +172,7 @@
             const remoteVideoRef = useRef(null);
             const currentCallRef = useRef(null);
             const callStartTimeRef = useRef(null);
+            const typingTimeoutRef = useRef(null);
 
             // --- INITIALIZATION ---
             useEffect(() => {
@@ -167,22 +196,32 @@
                 if (chatBoxRef.current) {
                     chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight;
                 }
-            }, [chatHistory]);
+            }, [chatHistory, peerIsTyping]); // Also scroll when typing appears
 
             // --- PEER JS SETUP ---
             const setupPeer = () => {
+                // Ensure unique ID to prevent conflicts on same browser
                 const peer = new window.Peer(PEER_CONFIG);
                 peerRef.current = peer;
 
                 peer.on('error', (err) => {
                     console.error("PeerJS Error:", err);
-                    setError("Connection failed. Please refresh.");
+                    let niceError = "Connection failed.";
+                    if (err.type === 'peer-unavailable') niceError = "Peer not found. They may be offline.";
+                    if (err.type === 'browser-incompatible') niceError = "Browser incompatible. Use Chrome/Safari.";
+                    if (err.type === 'network') niceError = "Firewall detected. Try mobile data or different WiFi.";
+                    
+                    setError(niceError);
                     setIsBusy(false);
-                    if (err.type === 'disconnected') peer.reconnect();
+                    // Attempt slight exponential backoff if just disconnected
+                    if (err.type === 'disconnected') setTimeout(() => peer.reconnect(), 1000);
                 });
 
                 // Handle Incoming Data Connection
                 peer.on('connection', (conn) => {
+                    // Close existing if any to prevent ghost connections
+                    if (connRef.current && connRef.current.open) connRef.current.close();
+                    
                     connRef.current = conn;
                     setupConnectionEvents(conn);
                 });
@@ -249,6 +288,7 @@
 
                 peer.on('open', (id) => {
                     setMyPeerId(id);
+                    // Important: reliable: true ensures packets are resent if dropped
                     const conn = peer.connect(targetPeerId, {
                         metadata: { username: username },
                         reliable: true
@@ -263,6 +303,9 @@
                 conn.on('open', () => {
                     setIsConnected(true);
                     setStep('chat');
+                    // Reset Typing Status
+                    setPeerIsTyping(false);
+                    
                     if (role === 'host' && conn.metadata) {
                         setTargetName(conn.metadata.username);
                         conn.send({ type: 'handshake', name: username });
@@ -271,15 +314,18 @@
 
                 conn.on('data', (data) => {
                     if (data.type === 'message') {
+                        setPeerIsTyping(false); // They sent message, so they stopped typing
                         setChatHistory(prev => [...prev, { sender: 'them', type: 'text', text: data.text, time: new Date() }]);
+                    } else if (data.type === 'typing') {
+                        setPeerIsTyping(data.isTyping);
                     } else if (data.type === 'image') {
+                         setPeerIsTyping(false);
                         setChatHistory(prev => [...prev, { sender: 'them', type: 'image', image: data.image, time: new Date() }]);
                     } else if (data.type === 'system') {
                         setChatHistory(prev => [...prev, { sender: 'system', text: data.text, time: new Date() }]);
                     } else if (data.type === 'call-rejected') {
                         setIncomingCall(null);
                         setCallActive(false);
-                        // Clean up any pending call state
                         if (currentCallRef.current) currentCallRef.current.close();
                         if (myStream) myStream.getTracks().forEach(track => track.stop());
                         setMyStream(null);
@@ -293,18 +339,45 @@
                 conn.on('close', () => {
                     setIsConnected(false);
                     setCallActive(false);
+                    setPeerIsTyping(false);
                     alert(`${targetName || 'User'} has left the chat.`);
                     window.location.href = window.location.pathname; 
                 });
             };
 
             // --- MESSAGING FUNCTIONS ---
+            
+            // Handle Typing Logic
+            const handleInputChange = (e) => {
+                const newVal = e.target.value;
+                setMessage(newVal);
+
+                if (connRef.current && isConnected) {
+                    // Send typing true immediately
+                    connRef.current.send({ type: 'typing', isTyping: true });
+
+                    // Clear existing timeout
+                    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+
+                    // Set timeout to stop typing after 1.5s of no input
+                    typingTimeoutRef.current = setTimeout(() => {
+                        if (connRef.current && isConnected) {
+                            connRef.current.send({ type: 'typing', isTyping: false });
+                        }
+                    }, 1500);
+                }
+            };
+
             const sendMessage = (e) => {
                 e && e.preventDefault();
                 if (!message.trim() || !isConnected) return;
 
+                // Stop typing indication immediately on send
+                if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
                 const msgData = { type: 'message', text: message };
                 connRef.current.send(msgData);
+                // Also explicitly send stop typing to be safe
+                connRef.current.send({ type: 'typing', isTyping: false });
 
                 setChatHistory(prev => [...prev, { sender: 'me', type: 'text', text: message, time: new Date() }]);
                 setMessage('');
@@ -315,7 +388,6 @@
                 const file = e.target.files[0];
                 if (!file) return;
 
-                // Limit size to ~1.5MB to be safe with PeerJS data channel limits
                 if (file.size > 1.5 * 1024 * 1024) {
                     alert("Image is too large. Please select an image under 1.5MB.");
                     return;
@@ -331,15 +403,16 @@
             };
 
             const addEmoji = (emoji) => {
-                setMessage(prev => prev + emoji);
+                // Manually trigger change to activate typing logic
+                const newMsg = message + emoji;
+                handleInputChange({ target: { value: newMsg }});
             };
 
             // --- CALLING FUNCTIONS ---
             
             const startCall = (mode) => {
-                if (callActive) return; // Prevent double calling
+                if (callActive) return; 
                 
-                // Cleanup existing streams if any (safety check)
                 if (myStream) {
                     myStream.getTracks().forEach(track => track.stop());
                 }
@@ -352,7 +425,6 @@
                     if (mode === 'screen') {
                         return navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
                     } else {
-                        // IF VOICE MODE: video is FALSE
                         return navigator.mediaDevices.getUserMedia({ 
                             video: mode === 'video', 
                             audio: true 
@@ -366,7 +438,6 @@
                         setCallActive(true);
                         callStartTimeRef.current = Date.now();
                         
-                        // Notify System Message
                         const startMsg = `${mode.charAt(0).toUpperCase() + mode.slice(1)} call started`;
                         setChatHistory(prev => [...prev, { sender: 'system', text: startMsg, time: new Date() }]);
                         connRef.current.send({ type: 'system', text: startMsg });
@@ -385,25 +456,21 @@
                     .catch(err => {
                         console.error("Failed to get local stream", err);
                         alert("Could not access camera/microphone/screen.");
-                        setCallActive(false); // Reset if failure
+                        setCallActive(false); 
                     });
             };
 
             const answerCall = () => {
-                // Determine mode from incoming call if possible, otherwise default to audio/video based on assumption
-                // For better UX, ideally we'd check incomingCall.metadata.mode
                 const incomingMode = incomingCall.metadata?.mode || 'video';
                 setCallMode(incomingMode);
                 setIsMuted(false);
                 setIsSpeakerMuted(false);
 
                 const mediaConstraints = {
-                    video: incomingMode === 'video' || incomingMode === 'screen', // If they are sharing screen or video, we usually answer with video, or just audio?
-                    // Let's mirror: if voice call, answer voice only.
+                    video: incomingMode === 'video' || incomingMode === 'screen', 
                     audio: true
                 };
                 
-                // If strictly voice call, force video false
                 if (incomingMode === 'voice') mediaConstraints.video = false;
 
                 navigator.mediaDevices.getUserMedia(mediaConstraints)
@@ -429,7 +496,6 @@
             };
 
             const rejectCall = () => {
-                // Send signal to reject
                 if (connRef.current && isConnected) {
                     connRef.current.send({ type: 'call-rejected' });
                 }
@@ -448,7 +514,6 @@
             };
 
             const toggleSpeaker = () => {
-                // Toggle remote video element muted state
                 if (remoteVideoRef.current) {
                     remoteVideoRef.current.muted = !remoteVideoRef.current.muted;
                     setIsSpeakerMuted(remoteVideoRef.current.muted);
@@ -468,7 +533,6 @@
                     const durationStr = formatDuration(duration);
                     const endMsg = `Call ended • ${durationStr}`;
                     
-                    // Only log if call was actually active
                     if (callActive) {
                         setChatHistory(prev => [...prev, { sender: 'system', text: endMsg, time: new Date() }]);
                         if(connRef.current && isConnected) connRef.current.send({ type: 'system', text: endMsg });
@@ -488,14 +552,11 @@
                 setIsSpeakerMuted(false);
             };
 
-            // Attach streams to video elements when they change
             useEffect(() => {
                 if (callActive) {
-                    // For local video (self view) - always muted to prevent echo
                     if (localVideoRef.current && myStream) {
                         localVideoRef.current.srcObject = myStream;
                     }
-                    // For remote video - apply speaker mute state
                     if (remoteVideoRef.current && remoteStream) {
                         remoteVideoRef.current.srcObject = remoteStream;
                         remoteVideoRef.current.muted = isSpeakerMuted;
@@ -503,7 +564,6 @@
                 }
             }, [callActive, myStream, remoteStream]);
             
-            // Watch for speaker mute toggle separately to apply to ref immediately
             useEffect(() => {
                 if (remoteVideoRef.current) {
                     remoteVideoRef.current.muted = isSpeakerMuted;
@@ -526,13 +586,11 @@
             const CallOverlay = () => {
                 if (!callActive) return null;
                 
-                // If it's a VOICE call, we show a different UI (Avatar) instead of video
                 const isVoiceOnly = callMode === 'voice';
 
                 return (
                     <div className="fixed inset-0 z-50 bg-slate-900 flex flex-col">
                         <div className="flex-1 relative bg-black flex items-center justify-center overflow-hidden">
-                            {/* Remote Stream */}
                             {isVoiceOnly ? (
                                 <div className="flex flex-col items-center justify-center animate-pulse">
                                     <div className="w-32 h-32 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-4xl text-white font-bold shadow-[0_0_40px_rgba(99,102,241,0.5)] mb-4">
@@ -552,16 +610,10 @@
                                 />
                             )}
                             
-                            {/* Hidden audio element for voice calls if we aren't using the video tag visually, 
-                                BUT we reused the video tag above even for voice (hidden or not), 
-                                actually for voice only we just hide the video tag or use it for audio only.
-                                Let's keep the video tag rendered but hidden if voice only so audio plays.
-                             */}
                              {isVoiceOnly && (
                                 <video ref={remoteVideoRef} autoPlay playsInline className="hidden" />
                              )}
 
-                            {/* Local Video (PiP) - Hide if voice mode */}
                             {!isVoiceOnly && (
                                 <div className="absolute top-4 right-4 w-28 h-40 md:w-32 md:h-48 bg-slate-800 rounded-xl overflow-hidden shadow-2xl border border-white/20">
                                     <video 
@@ -574,14 +626,12 @@
                                 </div>
                             )}
 
-                            {/* Call Status Badge */}
                             <div className="absolute top-6 left-6 text-white bg-black/40 px-4 py-2 rounded-full backdrop-blur-md border border-white/10 flex items-center gap-2">
                                 <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
                                 {targetName} • {callMode === 'screen' ? 'Screen Sharing' : (callMode === 'voice' ? 'Voice' : 'Video')}
                             </div>
                         </div>
 
-                        {/* Controls Bar */}
                         <div className="h-28 bg-slate-900/90 backdrop-blur-md flex items-center justify-center gap-6 pb-6 pt-4">
                              <button 
                                 onClick={toggleMic}
@@ -608,7 +658,6 @@
                 );
             };
 
-            // Incoming Call Modal
             const IncomingCallModal = () => {
                 if (!incomingCall) return null;
                 const mode = incomingCall.metadata?.mode || 'video';
@@ -813,11 +862,19 @@
                                     );
                                 })
                             )}
+                            
+                            {/* Typing Indicator Bubble */}
+                            {peerIsTyping && (
+                                <div className="flex w-full msg-enter justify-start">
+                                    <div className="bg-white px-4 py-3 rounded-[22px] rounded-tl-md border border-slate-100 shadow-sm">
+                                        <TypingIndicator />
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* Input Area */}
                         <div className="bg-white p-3 md:p-4 border-t border-slate-200">
-                             {/* Emoji Picker Popover */}
                              {showEmoji && (
                                 <div className="absolute bottom-20 left-4 bg-white shadow-xl rounded-2xl p-2 border border-slate-100 grid grid-cols-4 gap-2 animate-fadeIn z-30">
                                     {EMOJIS.map(e => (
@@ -839,7 +896,7 @@
                                         className="w-full bg-transparent border-0 px-4 py-3.5 focus:ring-0 text-slate-800 placeholder:text-slate-400 outline-none disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed"
                                         placeholder={isConnected ? "Type a message..." : "User has left the chat"}
                                         value={message}
-                                        onChange={(e) => setMessage(e.target.value)}
+                                        onChange={handleInputChange}
                                         autoComplete="off"
                                     />
                                 </div>
