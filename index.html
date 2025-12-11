@@ -800,7 +800,11 @@
                     const left = 40, right = 40, usableWidth = pageWidth - left - right;
                     let y = 50;
 
-                    const monthlyData = this.getAllMonthsSummary();
+                    // --- FILTER DATA FOR CURRENT MONTH ONLY ---
+                    const allMonthsData = this.getAllMonthsSummary();
+                    const currentKey = this.getCurrentMonthKey();
+                    // This is the key change: we filter to only keep the month the user is currently looking at
+                    const monthlyData = allMonthsData.filter(m => m.monthKey === currentKey);
 
                     // Title
                     doc.setFont('helvetica', 'bold'); 
@@ -850,7 +854,7 @@
                     doc.setFont('helvetica', 'bold'); 
                     doc.setFontSize(16); 
                     doc.setTextColor(147, 51, 234);
-                    doc.text('Overall Spending Analysis', pageWidth/2, y, {align:'center'});
+                    doc.text('Monthly Spending Analysis', pageWidth/2, y, {align:'center'});
                     y += 30;
 
                     const allCats = {};
@@ -882,6 +886,12 @@
                             margin: { left, right }
                         });
                         y = doc.lastAutoTable.finalY + 40;
+                    } else {
+                        doc.setFont('helvetica', 'italic');
+                        doc.setFontSize(12);
+                        doc.setTextColor(100);
+                        doc.text("No data available for this month.", pageWidth/2, y, {align:'center'});
+                        y += 40;
                     }
 
                     // --- Monthly Data ---
@@ -933,7 +943,7 @@
                         }
                     });
 
-                    doc.save(`Financial_Sync_Report.pdf`);
+                    doc.save(`Financial_Report_${currentKey}.pdf`);
                     addToast('Report generated successfully');
 
                 } catch (err) {
