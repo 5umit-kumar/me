@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NebulaLink - Command Center</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;600;700&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="style.css">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Outfit', 'sans-serif'], mono: ['Space Grotesk', 'monospace'] },
+                    colors: {
+                        space: "#030712",
+                        glass: "rgba(17, 24, 39, 0.7)",
+                        accent: "#8b5cf6",
+                        cyan: "#06b6d4",
+                    },
+                    animation: {
+                        'slide-up': 'slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+                        'float': 'float 6s ease-in-out infinite',
+                        'glow': 'glow 2s ease-in-out infinite alternate',
+                    },
+                    keyframes: {
+                        slideUp: {
+                            '0%': { transform: 'translateY(20px)', opacity: 0 },
+                            '100%': { transform: 'translateY(0)', opacity: 1 }
+                        },
+                        glow: {
+                            '0%': { boxShadow: '0 0 5px #8b5cf6' },
+                            '100%': { boxShadow: '0 0 20px #06b6d4, 0 0 10px #8b5cf6' }
+                        }
+                    }
+                },
+                screens: {
+                    'xs': '475px',
+                    'sm': '640px',
+                    'md': '768px',
+                    'lg': '1024px',
+                    'xl': '1280px',
+                }
+            }
+        }
+    </script>
+</head>
+<body class="min-h-screen flex flex-col overflow-x-hidden antialiased selection:bg-cyan-500/30 selection:text-cyan-200">
+
+    <nav class="sticky top-0 z-40 border-b border-white/5 bg-[#030712]/80 backdrop-blur-xl">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex justify-between items-center">
+            <div class="flex items-center gap-3 group cursor-default">
+                <div class="relative w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-violet-600 to-cyan-500 flex items-center justify-center shadow-lg shadow-violet-500/20 group-hover:shadow-cyan-500/30 transition-all duration-500">
+                    <div class="absolute inset-0 bg-white/20 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    <i class="fa-solid fa-link text-white text-xs sm:text-sm"></i>
+                </div>
+                <div class="flex flex-col justify-center">
+                    <span class="text-lg sm:text-xl font-bold tracking-tight text-white leading-none">Nebula<span class="font-light text-cyan-400">Link</span></span>
+                    <span class="text-[10px] font-mono text-slate-500 tracking-widest uppercase hidden xs:inline-block">Secure Shortener</span>
+                </div>
+            </div>
+            
+            <div id="user-status" class="hidden md:flex items-center gap-3 px-4 py-2 rounded-full bg-white/5 border border-white/5">
+                <div class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_10px_#10b981]"></div>
+                <span class="text-xs font-medium text-slate-300 font-mono tracking-wide">SYSTEM ONLINE</span>
+            </div>
+        </div>
+    </nav>
+
+    <main class="flex-grow container max-w-5xl mx-auto px-4 py-6 sm:py-12 grid lg:grid-cols-12 gap-6 lg:gap-8">
+        
+        <div class="lg:col-span-5 space-y-6 animate-slide-up order-1">
+            
+            <div class="mb-4 sm:mb-8 text-center lg:text-left">
+                <h1 class="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-3 sm:mb-4 leading-tight">
+                    Shorten Links,<br>
+                    <span class="text-gradient">Expand Reach.</span>
+                </h1>
+                <p class="text-slate-400 text-sm leading-relaxed max-w-md mx-auto lg:mx-0">
+                    Create branded, trackable links in seconds. Manage your fleet of URLs from this command center.
+                </p>
+            </div>
+
+            <div class="glass-panel rounded-2xl p-1 relative group">
+                <div class="absolute -inset-0.5 bg-gradient-to-r from-violet-600 to-cyan-600 rounded-2xl opacity-20 group-hover:opacity-50 blur transition duration-500"></div>
+                <form id="create-form" class="relative bg-[#0b1121] rounded-xl p-5 sm:p-6 space-y-5">
+                    
+                    <div class="space-y-2 group/input">
+                        <label class="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Destination</label>
+                        <div class="relative input-glow rounded-xl transition-all">
+                            <div class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-600 group-focus-within/input:text-cyan-400 transition-colors pointer-events-none">
+                                <i class="fa-solid fa-globe"></i>
+                            </div>
+                            <input type="url" id="long-url" required 
+                                placeholder="https://example.com/url" 
+                                class="w-full bg-[#151d30] border border-white/10 rounded-xl py-3.5 sm:py-4 pl-12 pr-4 text-white placeholder:text-slate-600 focus:outline-none focus:bg-[#1a243a] transition-all font-light text-sm"
+                            >
+                        </div>
+                    </div>
+
+                    <div class="space-y-2 group/input">
+                        <label class="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Custom Alias <span class="text-[10px] normal-case opacity-50">(Optional)</span></label>
+                        <div class="flex items-stretch input-glow rounded-xl transition-all">
+                            <div class="flex items-center px-3 sm:px-4 bg-[#151d30] border-y border-l border-white/10 rounded-l-xl text-slate-500 font-mono text-xs border-r border-r-white/5">
+                                <i class="fa-solid fa-bolt mr-2 hidden xs:inline"></i> /
+                            </div>
+                            <input type="text" id="custom-alias" 
+                                placeholder="my-link" 
+                                class="flex-grow bg-[#151d30] border border-white/10 rounded-r-xl py-3 sm:py-3 px-4 text-white placeholder:text-slate-600 focus:outline-none focus:bg-[#1a243a] transition-all font-mono text-sm border-l-0"
+                                maxlength="20"
+                            >
+                        </div>
+                    </div>
+
+                    <button type="submit" id="submit-btn" class="btn-primary w-full py-3.5 sm:py-4 rounded-xl text-white font-bold text-sm uppercase tracking-widest flex items-center justify-center gap-3 mt-2 shadow-lg shadow-violet-900/20 touch-manipulation">
+                        <span>Generate Link</span>
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    </button>
+
+                </form>
+            </div>
+
+            <div id="result-card" class="hidden animate-slide-up">
+                <div class="glass-panel rounded-xl p-5 border-l-4 border-l-emerald-500 relative overflow-hidden">
+                    <div class="flex justify-between items-center mb-3">
+                        <span class="text-emerald-400 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+                            <i class="fa-solid fa-circle-check"></i> Link Deployed
+                        </span>
+                        <button onclick="resetForm()" class="p-1 text-xs text-slate-500 hover:text-white transition-colors"><i class="fa-solid fa-times text-lg"></i></button>
+                    </div>
+                    
+                    <div class="flex flex-col sm:flex-row gap-3 sm:gap-2">
+                        <input type="text" id="final-url" readonly class="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-3 text-emerald-300 font-mono text-xs focus:outline-none break-all">
+                        <div class="flex gap-2 shrink-0">
+                            <button id="copy-btn" class="flex-1 sm:flex-none px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-white transition-colors" title="Copy">
+                                <i class="fa-regular fa-copy"></i>
+                            </button>
+                            <a id="visit-btn" href="#" target="_blank" class="flex-1 sm:flex-none px-4 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 rounded-lg transition-colors flex items-center justify-center" title="Visit">
+                                <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="lg:col-span-7 space-y-4 order-2">
+            <div class="flex items-center justify-between px-2">
+                <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-layer-group text-violet-500"></i> Mission Log
+                </h2>
+                <span class="text-xs text-slate-500 font-mono">RECENT</span>
+            </div>
+
+            <div id="history-list" class="space-y-3 h-[400px] sm:h-[500px] overflow-y-auto pr-1 pb-10 no-scrollbar">
+                <div class="glass-panel p-4 rounded-xl flex items-center gap-4 animate-pulse">
+                    <div class="w-10 h-10 bg-white/5 rounded-lg"></div>
+                    <div class="flex-grow space-y-2">
+                        <div class="h-3 bg-white/5 rounded w-1/3"></div>
+                        <div class="h-2 bg-white/5 rounded w-1/2"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <div id="redirect-overlay" class="fixed inset-0 z-[100] bg-[#030712] hidden flex-col items-center justify-center p-6">
+        <div class="relative">
+            <div class="absolute inset-0 bg-violet-500/20 blur-3xl rounded-full"></div>
+            <div class="relative z-10 flex flex-col items-center text-center">
+                <div class="w-16 h-16 border-t-2 border-cyan-400 border-r-2 border-violet-500 rounded-full animate-spin mb-6"></div>
+                <h2 class="text-2xl font-bold text-white mb-2">Redirecting</h2>
+                <p id="redirect-target" class="text-slate-400 text-sm font-mono break-all max-w-xs">Target Acquired...</p>
+                <a id="manual-link" href="#" class="hidden mt-8 text-cyan-400 hover:text-cyan-300 text-sm underline decoration-dashed underline-offset-4 py-3">Click here if not redirected</a>
+            </div>
+        </div>
+    </div>
+
+    <div id="delete-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-[#1e293b] border border-white/10 p-6 rounded-2xl max-w-sm w-full shadow-2xl transform transition-all scale-100">
+            <div class="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center mb-4 text-red-500">
+                <i class="fa-solid fa-trash-can text-xl"></i>
+            </div>
+            <h3 class="text-lg font-bold text-white mb-2">Delete Link?</h3>
+            <p class="text-slate-400 text-sm mb-6">This action cannot be undone. The short link will stop working immediately.</p>
+            <div class="flex gap-3">
+                <button onclick="closeDeleteModal()" class="flex-1 py-3 rounded-xl bg-slate-700 text-white font-medium hover:bg-slate-600 transition-colors">Cancel</button>
+                <button id="confirm-delete-btn" class="flex-1 py-3 rounded-xl bg-red-600 text-white font-medium hover:bg-red-500 transition-colors shadow-lg shadow-red-900/20">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="error-overlay" class="fixed inset-0 z-[200] bg-black/90 hidden flex-col items-center justify-center p-6 backdrop-blur-md">
+        <div class="glass-panel p-6 sm:p-8 rounded-2xl max-w-md w-full text-center border-red-500/30">
+            <i class="fa-solid fa-triangle-exclamation text-4xl text-red-500 mb-4"></i>
+            <h2 class="text-xl font-bold text-white mb-2">System Error</h2>
+            <p id="error-text" class="text-slate-400 text-sm mb-6">Connection failed.</p>
+            <div id="solution-box" class="text-left bg-white/5 p-4 rounded-lg mb-6 text-xs text-slate-300 border border-white/5 break-words"></div>
+            <button onclick="window.location.reload()" class="w-full py-3 bg-white text-black font-bold rounded-xl hover:bg-slate-200">Reload System</button>
+        </div>
+    </div>
+
+    <div id="toast" class="fixed bottom-8 left-1/2 -translate-x-1/2 glass-panel px-6 py-3 rounded-full flex items-center gap-3 translate-y-32 opacity-0 transition-all duration-500 z-[60] border-l-4 border-l-cyan-500 whitespace-nowrap">
+        <span id="toast-msg" class="text-sm text-white font-medium">Notification</span>
+    </div>
+
+    <script type="module" src="script.js"></script>
+</body>
+</html>
