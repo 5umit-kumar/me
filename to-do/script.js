@@ -10,11 +10,8 @@ let insightType = 'monthly';
 let dailyViewMode = 'list'; 
 let calendarViewDate = new Date(); 
 
-// Graph State
 let chartInstance = null;
-let currentGraphDate = new Date(); // Represents the end date of the week being viewed
-
-// Streak View State
+let currentGraphDate = new Date(); 
 let streakViewDate = new Date();
 
 const priorities = ['low', 'medium', 'high'];
@@ -31,10 +28,11 @@ const motivationalQuotes = [
     "Dream bigger. Do bigger."
 ];
 
+// Light Theme Colors for Priority
 const PRIORITY_CONFIG = {
-    high: { label: 'High', color: 'text-red-300 bg-red-500/10 border-red-500/20', iconColor: 'text-red-400' },
-    medium: { label: 'Med', color: 'text-amber-300 bg-amber-500/10 border-amber-500/20', iconColor: 'text-amber-400' },
-    low: { label: 'Low', color: 'text-blue-300 bg-blue-500/10 border-blue-500/20', iconColor: 'text-blue-400' }
+    high: { label: 'High', color: 'text-red-600 bg-red-50 border-red-200', iconColor: 'text-red-500' },
+    medium: { label: 'Med', color: 'text-amber-600 bg-amber-50 border-amber-200', iconColor: 'text-amber-500' },
+    low: { label: 'Low', color: 'text-blue-600 bg-blue-50 border-blue-200', iconColor: 'text-blue-500' }
 };
 
 // --- DOM Cache ---
@@ -80,7 +78,6 @@ const DOM = {
     weeklyStreakGrid: document.getElementById('weeklyStreakGrid'),
     streakPopupCount: document.getElementById('streakPopupCount'),
     streakDateRange: document.getElementById('streakDateRange'),
-    // Stats
     statAvgScore: document.getElementById('statAvgScore'),
     statBestDay: document.getElementById('statBestDay'),
     statMomentum: document.getElementById('statMomentum'),
@@ -89,7 +86,6 @@ const DOM = {
     pdfModalContent: document.getElementById('pdfModalContent')
 };
 
-// --- HELPER: Local Date String to fix Timezone Bug ---
 const getLocalDateStr = (date) => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -97,67 +93,42 @@ const getLocalDateStr = (date) => {
     return `${year}-${month}-${day}`;
 };
 
-// --- STREAK LOGIC (FIXED) ---
+// --- STREAK LOGIC ---
 const isDayComplete = (dateStr) => {
-    // Check based on 'YYYY-MM-DD' prefix match
     const dayTasks = tasks.filter(t => t.date.startsWith(dateStr));
-    
-    if (dayTasks.length === 0) return 'empty'; // Distinguish empty
+    if (dayTasks.length === 0) return 'empty'; 
     return dayTasks.every(t => t.completed) ? 'complete' : 'incomplete';
 };
 
 const calculateStreak = () => {
-    // Get unique dates based on LOCAL strings
-    const uniqueDates = new Set(tasks.map(t => {
-        // If the stored date is ISO with time, this converts it to local YYYY-MM-DD
-        return getLocalDateStr(new Date(t.date));
-    }));
-
+    const uniqueDates = new Set(tasks.map(t => getLocalDateStr(new Date(t.date))));
     if (uniqueDates.size === 0) return 0;
 
     let streak = 0;
-    let checkDate = new Date(); // Starts Now
-    
-    // Check "Today" first
+    let checkDate = new Date();
     let checkStr = getLocalDateStr(checkDate);
     let status = isDayComplete(checkStr);
 
-    // Grace Period Logic:
-    // If today is complete -> Add to streak
-    // If today is incomplete/empty -> Do not add, do not break. Just check yesterday.
-    if (status === 'complete') {
-        streak++;
-    }
+    if (status === 'complete') streak++;
     
-    // Move to yesterday
     checkDate.setDate(checkDate.getDate() - 1);
 
-    // Loop backwards
     while (true) {
         checkStr = getLocalDateStr(checkDate);
         status = isDayComplete(checkStr);
 
-        if (status === 'complete') {
-            streak++;
-        } else if (status === 'incomplete') {
-            // Task exists but not done -> Streak broken
-            break;
-        } else if (status === 'empty') {
-            // Break on empty days (Strict Mode)
-            break; 
-        }
+        if (status === 'complete') streak++;
+        else if (status === 'incomplete') break;
+        else if (status === 'empty') break; 
 
         checkDate.setDate(checkDate.getDate() - 1);
-        
-        // Safety break
         if (streak > 3650) break; 
     }
-    
     return streak;
 };
 
 window.openStreakPopup = () => {
-    streakViewDate = new Date(); // Reset to today
+    streakViewDate = new Date();
     showStreakPopup();
 };
 
@@ -171,31 +142,25 @@ const showStreakPopup = () => {
     DOM.streakPopupCount.textContent = `Current Streak: ${streak} Day${streak !== 1 ? 's' : ''}`;
     DOM.weeklyStreakGrid.innerHTML = '';
     
-    // Calculate week range based on streakViewDate aligned to MONDAY
-    const dayOfWeek = streakViewDate.getDay(); // 0 is Sunday
-    // Adjust to make Monday index 0, Sunday index 6
+    const dayOfWeek = streakViewDate.getDay(); 
     const monIndex = (dayOfWeek + 6) % 7;
-    
     const startOfWeek = new Date(streakViewDate);
     startOfWeek.setDate(streakViewDate.getDate() - monIndex); 
     
     const endOfWeek = new Date(startOfWeek);
     endOfWeek.setDate(startOfWeek.getDate() + 6);
 
-    // Update Range Label
     const rangeStr = `${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric'}).format(startOfWeek)} - ${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric'}).format(endOfWeek)}`;
     DOM.streakDateRange.textContent = rangeStr;
 
     const today = new Date();
     const todayStr = getLocalDateStr(today);
 
-    // Updated status checker using Local Time logic
     const getDayStatus = (d) => {
         const dStr = getLocalDateStr(d);
         return isDayComplete(dStr);
     };
 
-    // MONDAY to SUNDAY labels
     const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
     for (let i = 0; i < 7; i++) {
@@ -208,26 +173,23 @@ const showStreakPopup = () => {
         const isFuture = currentDay > today && !isToday;
 
         const el = document.createElement('div');
-        el.className = "flex flex-col items-center gap-2 min-w-[30px]"; // Added min-w for responsiveness
+        el.className = "flex flex-col items-center gap-2 min-w-[30px]";
         
         let iconHtml = '';
         if (isFuture) {
-            iconHtml = `<div class="w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-gray-600 border-dashed"></div>`;
+            iconHtml = `<div class="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 border-dashed"></div>`;
         } else if (status === 'complete') {
-            iconHtml = `<div class="w-8 h-8 rounded-full bg-orange-500/20 border border-orange-500/50 flex items-center justify-center text-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]"><i data-lucide="flame" class="w-4 h-4 fill-orange-500"></i></div>`;
+            iconHtml = `<div class="w-8 h-8 rounded-full bg-orange-100 border border-orange-200 flex items-center justify-center text-orange-500 shadow-sm"><i data-lucide="flame" class="w-4 h-4 fill-orange-500"></i></div>`;
         } else if (status === 'incomplete') {
-                // Incomplete task logic
-                iconHtml = `<div class="w-8 h-8 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-500"><i data-lucide="x" class="w-4 h-4"></i></div>`;
+             iconHtml = `<div class="w-8 h-8 rounded-full bg-red-50 border border-red-200 flex items-center justify-center text-red-500"><i data-lucide="x" class="w-4 h-4"></i></div>`;
         } else if (isToday) {
-            // Today pending
-            iconHtml = `<div class="w-8 h-8 rounded-full bg-purple-500/20 border border-purple-500/50 flex items-center justify-center text-purple-400 animate-pulse"><i data-lucide="circle" class="w-4 h-4"></i></div>`;
+            iconHtml = `<div class="w-8 h-8 rounded-full bg-purple-50 border border-purple-200 flex items-center justify-center text-primary animate-pulse"><i data-lucide="circle" class="w-4 h-4"></i></div>`;
         } else {
-            // Empty/Missed
-            iconHtml = `<div class="w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-gray-500"><i data-lucide="minus" class="w-4 h-4"></i></div>`;
+            iconHtml = `<div class="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-300"><i data-lucide="minus" class="w-4 h-4"></i></div>`;
         }
 
         el.innerHTML = `
-            <span class="text-[10px] font-bold ${isToday ? 'text-purple-400' : 'text-gray-400'} font-mono">${days[i]}</span>
+            <span class="text-[10px] font-bold ${isToday ? 'text-primary' : 'text-slate-400'} font-mono">${days[i]}</span>
             ${iconHtml}
         `;
         DOM.weeklyStreakGrid.appendChild(el);
@@ -245,7 +207,6 @@ window.closeStreakPopup = () => {
     DOM.streakPopupContent.classList.remove('scale-100');
 };
 
-// --- PDF Modal Logic ---
 window.openPdfModal = () => {
     DOM.pdfModal.classList.remove('opacity-0', 'pointer-events-none');
     DOM.pdfModalContent.classList.remove('scale-95');
@@ -258,7 +219,6 @@ window.closePdfModal = () => {
     DOM.pdfModalContent.classList.remove('scale-100');
 };
 
-// --- PDF Generation Logic ---
 window.generatePDF = (type) => {
     closePdfModal();
     const element = document.createElement('div');
@@ -272,7 +232,6 @@ window.generatePDF = (type) => {
     let contentHtml = '';
     let reportTitle = '';
 
-    // Common Header
     const headerHtml = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; border-bottom: 3px solid #7c3aed; padding-bottom: 20px;">
             <div>
@@ -286,11 +245,9 @@ window.generatePDF = (type) => {
         </div>
     `;
 
-    // --- Type 1: Monthly Daily List (Updated from Monthly List) ---
     if (type === 'list') {
         reportTitle = 'Daily Breakdown Report';
         let rowsHtml = '';
-        // Use Daily Data instead of Monthly Aggregation
         const days = getAggregatedDays();
         const sortedKeys = Object.keys(days).sort().reverse();
         
@@ -303,21 +260,18 @@ window.generatePDF = (type) => {
             let color = '#ef4444';
             let badgeIcon = '⚠️';
             let grade = 'D';
-            let bg = '#fee2e2';
 
-            if (percent === 100) { color = '#ca8a04'; badgeIcon = '🏆'; grade = 'S'; bg = '#fef9c3'; }
-            else if (percent >= 80) { color = '#059669'; badgeIcon = '⭐'; grade = 'A'; bg = '#d1fae5'; }
-            else if (percent >= 60) { color = '#2563eb'; badgeIcon = '📈'; grade = 'B'; bg = '#dbeafe'; }
-            else if (percent >= 40) { color = '#9333ea'; badgeIcon = '🎯'; grade = 'C'; bg = '#f3e8ff'; }
+            if (percent === 100) { color = '#ca8a04'; badgeIcon = '🏆'; grade = 'S'; }
+            else if (percent >= 80) { color = '#059669'; badgeIcon = '⭐'; grade = 'A'; }
+            else if (percent >= 60) { color = '#2563eb'; badgeIcon = '📈'; grade = 'B'; }
+            else if (percent >= 40) { color = '#9333ea'; badgeIcon = '🎯'; grade = 'C'; }
 
             rowsHtml += `
-                <div style="display: flex; align-items: center; background: #ffffff; border: 1px solid #f3f4f6; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.02);">
-                    
+                <div style="display: flex; align-items: center; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
                     <div style="width: 60px; text-align: center; margin-right: 20px;">
                         <div style="font-weight: 800; font-size: 24px; color: ${color}; line-height: 1;">${grade}</div>
                         <div style="font-size: 10px; font-weight: 600; color: #9ca3af; margin-top: 4px;">GRADE</div>
                     </div>
-
                     <div style="flex: 1; border-left: 2px solid #f3f4f6; padding-left: 20px;">
                         <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
                             <h3 style="font-size: 15px; font-weight: 700; color: #1f2937; margin: 0;">${dateLabel}</h3>
@@ -348,11 +302,8 @@ window.generatePDF = (type) => {
             </div>
         `;
     }
-
-    // --- Type 2: Visual Calendar (Updated with Icons) ---
     else if (type === 'calendar') {
         reportTitle = 'Visual Calendar View';
-        
         const year = calendarViewDate.getFullYear();
         const month = calendarViewDate.getMonth();
         const monthName = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(calendarViewDate);
@@ -364,7 +315,6 @@ window.generatePDF = (type) => {
             </div>
             <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-bottom: 20px;">`;
         
-        // Header Days
         ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(d => {
             gridHtml += `<div style="text-align: center; font-size: 11px; font-weight: 700; color: #9ca3af; padding: 8px; text-transform: uppercase; letter-spacing: 0.5px;">${d}</div>`;
         });
@@ -382,21 +332,15 @@ window.generatePDF = (type) => {
             const data = daysData[currentDayStr];
             let bg = "#f9fafb";
             let border = "#e5e7eb";
-            let textCol = "#d1d5db";
             let icon = "";
-            let contentColor = "#9ca3af";
             
             if(data) {
                 const percent = Math.round((data.completed / data.total) * 100) || 0;
-                textCol = "#ffffff";
-                if (percent === 100) { bg = "#eab308"; border = "#ca8a04"; icon = "🏆"; contentColor="#ffffff"; }
-                else if (percent >= 80) { bg = "#10b981"; border = "#059669"; icon = "⭐"; contentColor="#ffffff"; }
-                else if (percent >= 60) { bg = "#3b82f6"; border = "#2563eb"; icon = "📈"; contentColor="#ffffff"; }
-                else if (percent >= 40) { bg = "#a855f7"; border = "#9333ea"; icon = "🎯"; contentColor="#ffffff"; }
-                else { bg = "#ef4444"; border = "#dc2626"; icon = "⚠️"; contentColor="#ffffff"; }
-            } else {
-                // Empty days logic
-                textCol = "#1f2937";
+                if (percent === 100) { bg = "#eab308"; border = "#ca8a04"; icon = "🏆"; }
+                else if (percent >= 80) { bg = "#10b981"; border = "#059669"; icon = "⭐"; }
+                else if (percent >= 60) { bg = "#3b82f6"; border = "#2563eb"; icon = "📈"; }
+                else if (percent >= 40) { bg = "#a855f7"; border = "#9333ea"; icon = "🎯"; }
+                else { bg = "#ef4444"; border = "#dc2626"; icon = "⚠️"; }
             }
 
             gridHtml += `
@@ -406,23 +350,12 @@ window.generatePDF = (type) => {
                 </div>
             `;
         }
-        gridHtml += `</div>
-        <div style="display: flex; justify-content: center; gap: 15px; margin-top: 10px;">
-            <div style="display: flex; align-items: center; gap: 5px; font-size: 10px; color: #6b7280;"><span style="color: #eab308">🏆</span> Perfect</div>
-            <div style="display: flex; align-items: center; gap: 5px; font-size: 10px; color: #6b7280;"><span style="color: #10b981">⭐</span> Excellent</div>
-            <div style="display: flex; align-items: center; gap: 5px; font-size: 10px; color: #6b7280;"><span style="color: #3b82f6">📈</span> Good</div>
-            <div style="display: flex; align-items: center; gap: 5px; font-size: 10px; color: #6b7280;"><span style="color: #ef4444">⚠️</span> Needs Work</div>
-        </div>
-        `;
+        gridHtml += `</div>`;
         contentHtml = `${gridHtml}`;
     }
-
-    // --- Type 3: Graph ---
     else if (type === 'graph') {
         reportTitle = 'Weekly Trend Analysis';
-        // Convert Chart to Base64 Image
         const canvas = document.getElementById('progressChart');
-        // We create a temporary high-res version or just use current
         const chartImg = canvas.toDataURL('image/png', 1.0);
         
         contentHtml = `
@@ -430,7 +363,7 @@ window.generatePDF = (type) => {
                 <div style="width: 4px; height: 24px; background: #ec4899; border-radius: 2px;"></div>
                 <h2 style="font-size: 20px; font-weight: 700; color: #111827; margin: 0;">${reportTitle}</h2>
             </div>
-            <div style="border: 1px solid #e5e7eb; border-radius: 16px; padding: 24px; background: #fafafa; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
+            <div style="border: 1px solid #e5e7eb; border-radius: 16px; padding: 24px; background: #fafafa;">
                 <p style="text-align:center; font-size: 14px; color: #6b7280; font-weight: 600; margin-bottom: 25px; text-transform: uppercase; letter-spacing: 1px;">
                     Week of ${DOM.graphDateRange.textContent}
                 </p>
@@ -478,7 +411,6 @@ window.generatePDF = (type) => {
     });
 };
 
-// --- Chart Logic ---
 window.changeGraphWeek = (offset) => {
     currentGraphDate.setDate(currentGraphDate.getDate() + (offset * 7));
     renderChart();
@@ -487,20 +419,16 @@ window.changeGraphWeek = (offset) => {
 const renderChart = () => {
     const ctx = document.getElementById('progressChart').getContext('2d');
     
-    // Destroy existing chart
     if (chartInstance) {
         chartInstance.destroy();
     }
 
-    // --- 1. Prepare Data based on Calendar Week (Mon-Sun) ---
     const daysData = getAggregatedDays();
     const labels = [];
     const dataPoints = [];
     const rawData = []; 
     
-    // Calculate the Monday of the week relative to currentGraphDate
-    const currentDay = currentGraphDate.getDay(); // 0 (Sun) to 6 (Sat)
-    // If it's Sunday (0), we go back 6 days to get Monday. Otherwise we go back (day - 1)
+    const currentDay = currentGraphDate.getDay(); 
     const distanceToMonday = currentDay === 0 ? 6 : currentDay - 1;
     
     const startOfWeek = new Date(currentGraphDate);
@@ -509,18 +437,14 @@ const renderChart = () => {
     const endOfWeek = new Date(startOfWeek);
     endOfWeek.setDate(startOfWeek.getDate() + 6);
     
-    // Format range text for the header
     const rangeStr = `${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric'}).format(startOfWeek)} - ${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric'}).format(endOfWeek)}`;
     DOM.graphDateRange.textContent = rangeStr;
 
-    // Loop from Monday (0) to Sunday (6)
     for(let i=0; i<7; i++) { 
         const d = new Date(startOfWeek);
         d.setDate(startOfWeek.getDate() + i);
         
-        // Construct Key for lookup - USE LOCAL STRING HELPER
         const key = getLocalDateStr(d);
-        
         const dayName = new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(d);
         labels.push(dayName);
         
@@ -535,43 +459,39 @@ const renderChart = () => {
         }
     }
 
-    // --- 2. Calculate Dashboard Stats ---
     const nonZeroDays = dataPoints.filter(p => p > 0);
     const totalScore = dataPoints.reduce((a, b) => a + b, 0);
     const avg = nonZeroDays.length ? Math.round(totalScore / nonZeroDays.length) : 0;
     DOM.statAvgScore.textContent = `${avg}%`;
-    DOM.statAvgScore.className = `font-mono text-xl font-bold ${avg >= 80 ? 'text-green-400' : avg >= 50 ? 'text-blue-400' : 'text-white'}`;
+    DOM.statAvgScore.className = `font-mono text-xl font-bold ${avg >= 80 ? 'text-green-600' : avg >= 50 ? 'text-blue-600' : 'text-slate-800'}`;
 
     const maxScore = Math.max(...dataPoints);
     const bestIndex = dataPoints.lastIndexOf(maxScore);
     if (maxScore > 0) {
         const bestDate = rawData[bestIndex].date;
         DOM.statBestDay.textContent = new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(bestDate);
-        DOM.statBestDay.className = "font-display text-sm font-bold text-purple-300";
+        DOM.statBestDay.className = "font-display text-sm font-bold text-primary";
     } else {
         DOM.statBestDay.textContent = "-";
-        DOM.statBestDay.className = "font-display text-sm font-bold text-gray-500";
+        DOM.statBestDay.className = "font-display text-sm font-bold text-slate-400";
     }
 
-    // Momentum (First 3 vs Last 3 in this week view)
     const first3 = dataPoints.slice(0,3).reduce((a,b)=>a+b,0)/3;
     const last3 = dataPoints.slice(4).reduce((a,b)=>a+b,0)/3;
     
     let trendIcon = '→';
-    let trendColor = 'text-gray-400';
-    // Only show trend if there is data
+    let trendColor = 'text-slate-400';
     if(totalScore > 0) {
-        if (last3 > first3 + 5) { trendIcon = '↗'; trendColor = 'text-green-400'; }
-        else if (last3 < first3 - 5) { trendIcon = '↘'; trendColor = 'text-red-400'; }
+        if (last3 > first3 + 5) { trendIcon = '↗'; trendColor = 'text-green-500'; }
+        else if (last3 < first3 - 5) { trendIcon = '↘'; trendColor = 'text-red-500'; }
     }
     DOM.statMomentum.innerHTML = `<span class="${trendColor} text-lg">${trendIcon}</span>`;
 
-    // --- 3. Style (Colored Graph - Purple/Blue Gradient) ---
+    // Updated Gradient for Light Theme
     const gradient = ctx.createLinearGradient(0, 0, 0, 300);
-    gradient.addColorStop(0, 'rgba(139, 92, 246, 0.5)'); // Purple top
-    gradient.addColorStop(1, 'rgba(59, 130, 246, 0.0)'); // Transparent bottom
+    gradient.addColorStop(0, 'rgba(124, 58, 237, 0.4)'); 
+    gradient.addColorStop(1, 'rgba(124, 58, 237, 0.0)'); 
 
-    // --- 4. Chart Construction ---
     chartInstance = new Chart(ctx, {
         type: 'line',
         data: {
@@ -580,31 +500,28 @@ const renderChart = () => {
                 label: 'Completion',
                 data: dataPoints,
                 borderWidth: 3,
-                borderColor: '#8b5cf6', // Solid Purple Line (No Red)
-                backgroundColor: gradient, // Gradient Fill
-                fill: true, // Enable Fill
-                tension: 0.4, // Smooth Curves
-                pointBackgroundColor: '#18181b', 
-                pointBorderColor: '#8b5cf6', 
+                borderColor: '#7c3aed', // Primary Violet
+                backgroundColor: gradient,
+                fill: true,
+                tension: 0.4,
+                pointBackgroundColor: '#ffffff', 
+                pointBorderColor: '#7c3aed', 
                 pointBorderWidth: 2,
                 pointRadius: 4,
                 pointHoverRadius: 6,
                 pointHoverBorderWidth: 2,
                 pointHoverBorderColor: '#fff',
-                pointHoverBackgroundColor: '#8b5cf6'
+                pointHoverBackgroundColor: '#7c3aed'
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            interaction: {
-                mode: 'index',
-                intersect: false,
-            },
+            interaction: { mode: 'index', intersect: false },
             plugins: {
                 legend: { display: false },
                 tooltip: {
-                    backgroundColor: 'rgba(20, 20, 25, 0.95)',
+                    backgroundColor: 'rgba(30, 41, 59, 0.9)', // Dark Tooltip
                     titleColor: '#fff',
                     titleFont: { family: "'Outfit', sans-serif", size: 13 },
                     bodyColor: '#e2e8f0',
@@ -619,10 +536,7 @@ const renderChart = () => {
                             const val = context.parsed.y;
                             const idx = context.dataIndex;
                             const raw = rawData[idx];
-                            return [
-                                `Score: ${val}%`,
-                                `Completed: ${raw.completed}/${raw.total}`
-                            ];
+                            return [`Score: ${val}%`, `Completed: ${raw.completed}/${raw.total}`];
                         }
                     }
                 }
@@ -631,13 +545,13 @@ const renderChart = () => {
                 y: {
                     beginAtZero: true,
                     max: 105, 
-                    grid: { color: 'rgba(255, 255, 255, 0.03)' },
+                    grid: { color: '#e2e8f0' }, // Visible grid in light mode
                     ticks: { display: false } 
                 },
                 x: {
                     grid: { display: false },
                     ticks: { 
-                        color: '#a1a1aa', 
+                        color: '#64748b', // Slate-500
                         font: { size: 11, family: "'JetBrains Mono', monospace" } 
                     }
                 }
@@ -646,16 +560,15 @@ const renderChart = () => {
     });
 };
 
-// --- View Switching ---
 window.toggleView = () => {
     isDailyView = !isDailyView;
     if (isDailyView) {
         DOM.dailyView.classList.remove('hidden-view');
         DOM.monthlyView.classList.add('hidden-view');
         DOM.inputContainer.classList.remove('hidden-view');
-        DOM.pageTitle.innerHTML = `Goal <span class="text-purple-500">Sync</span>`;
+        DOM.pageTitle.innerHTML = `Goal <span class="text-primary">Sync</span>`;
         DOM.reportBtn.innerHTML = '<i data-lucide="bar-chart-2" class="w-4 h-4"></i><span>Insights</span>';
-        DOM.appIcon.innerHTML = '<i data-lucide="trophy" class="w-8 h-8 text-purple-400"></i>';
+        DOM.appIcon.innerHTML = '<i data-lucide="trophy" class="w-8 h-8"></i>';
         updateUI();
     } else {
         DOM.dailyView.classList.add('hidden-view');
@@ -663,7 +576,7 @@ window.toggleView = () => {
         DOM.inputContainer.classList.add('hidden-view');
         DOM.pageTitle.innerHTML = `Insights`;
         DOM.reportBtn.innerHTML = '<i data-lucide="layout-list" class="w-4 h-4"></i><span>Tasks</span>'; 
-        DOM.appIcon.innerHTML = '<i data-lucide="pie-chart" class="w-8 h-8 text-pink-400"></i>';
+        DOM.appIcon.innerHTML = '<i data-lucide="pie-chart" class="w-8 h-8 text-pink-500"></i>';
         updateInsightsUI();
     }
     lucide.createIcons();
@@ -680,32 +593,29 @@ window.setDailyMode = (mode) => {
 };
 
 const updateInsightsUI = () => {
-    // Render the graph always in insights view
     setTimeout(renderChart, 100);
 
     if(insightType === 'monthly') {
-        DOM.btnMonthly.className = "px-4 py-2 rounded-lg text-sm font-medium transition-all bg-white/10 text-white shadow-sm";
-        DOM.btnDaily.className = "px-4 py-2 rounded-lg text-sm font-medium transition-all text-gray-400 hover:text-white";
+        DOM.btnMonthly.className = "px-4 py-2 rounded-lg text-sm font-medium transition-all bg-slate-100 text-slate-900 shadow-sm border border-slate-200";
+        DOM.btnDaily.className = "px-4 py-2 rounded-lg text-sm font-medium transition-all text-slate-500 hover:text-slate-900 hover:bg-slate-50";
         DOM.dailyViewToggles.classList.add('hidden');
-        // SHOW GRAPH on Monthly View
         DOM.graphContainer.classList.remove('hidden');
         renderMonthlyReport();
     } else {
-        DOM.btnMonthly.className = "px-4 py-2 rounded-lg text-sm font-medium transition-all text-gray-400 hover:text-white";
-        DOM.btnDaily.className = "px-4 py-2 rounded-lg text-sm font-medium transition-all bg-white/10 text-white shadow";
+        DOM.btnMonthly.className = "px-4 py-2 rounded-lg text-sm font-medium transition-all text-slate-500 hover:text-slate-900 hover:bg-slate-50";
+        DOM.btnDaily.className = "px-4 py-2 rounded-lg text-sm font-medium transition-all bg-slate-100 text-slate-900 shadow-sm border border-slate-200";
         DOM.dailyViewToggles.classList.remove('hidden');
         DOM.dailyViewToggles.classList.add('flex');
         
-        // HIDE GRAPH on Daily View
         DOM.graphContainer.classList.add('hidden');
         
         if(dailyViewMode === 'list') {
-            DOM.btnListMode.className = "p-2 rounded-lg transition-all bg-white/10 text-white shadow";
-            DOM.btnCalendarMode.className = "p-2 rounded-lg transition-all text-gray-400 hover:text-white";
+            DOM.btnListMode.className = "p-2 rounded-lg transition-all bg-slate-100 text-slate-900 shadow-sm border border-slate-200";
+            DOM.btnCalendarMode.className = "p-2 rounded-lg transition-all text-slate-500 hover:text-slate-900 hover:bg-slate-50";
             renderDailyReportList();
         } else {
-            DOM.btnListMode.className = "p-2 rounded-lg transition-all text-gray-400 hover:text-white";
-            DOM.btnCalendarMode.className = "p-2 rounded-lg transition-all bg-white/10 text-white shadow";
+            DOM.btnListMode.className = "p-2 rounded-lg transition-all text-slate-500 hover:text-slate-900 hover:bg-slate-50";
+            DOM.btnCalendarMode.className = "p-2 rounded-lg transition-all bg-slate-100 text-slate-900 shadow-sm border border-slate-200";
             renderDailyReportCalendar();
         }
     }
@@ -717,7 +627,6 @@ const renderMonthlyReport = () => {
     const months = {};
     tasks.forEach(task => {
         const date = new Date(task.date);
-        // Use Local Time for Month Grouping too
         const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
         if (!months[key]) months[key] = { total: 0, completed: 0, date: date };
         months[key].total++;
@@ -758,12 +667,12 @@ const renderDailyReportCalendar = () => {
     const month = calendarViewDate.getMonth();
     
     const header = document.createElement('div');
-    header.className = "flex justify-between items-center mb-4 bg-white/5 p-3 rounded-xl border border-white/5";
+    header.className = "flex justify-between items-center mb-4 bg-white/60 p-3 rounded-xl border border-slate-200";
     const monthName = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(calendarViewDate);
     header.innerHTML = `
-        <button onclick="changeCalendarMonth(-1)" class="p-2 hover:bg-white/10 rounded-lg transition-colors"><i data-lucide="chevron-left" class="w-5 h-5 text-gray-300"></i></button>
-        <span class="text-lg font-bold text-white">${monthName}</span>
-        <button onclick="changeCalendarMonth(1)" class="p-2 hover:bg-white/10 rounded-lg transition-colors"><i data-lucide="chevron-right" class="w-5 h-5 text-gray-300"></i></button>
+        <button onclick="changeCalendarMonth(-1)" class="p-2 hover:bg-white rounded-lg transition-colors"><i data-lucide="chevron-left" class="w-5 h-5 text-slate-500"></i></button>
+        <span class="text-lg font-bold text-slate-800">${monthName}</span>
+        <button onclick="changeCalendarMonth(1)" class="p-2 hover:bg-white rounded-lg transition-colors"><i data-lucide="chevron-right" class="w-5 h-5 text-slate-500"></i></button>
     `;
     DOM.reportContainer.appendChild(header);
 
@@ -772,7 +681,7 @@ const renderDailyReportCalendar = () => {
     
     ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(d => {
         const el = document.createElement('div');
-        el.className = "text-center text-xs text-gray-500 font-medium py-2 uppercase tracking-wider";
+        el.className = "text-center text-xs text-slate-400 font-medium py-2 uppercase tracking-wider";
         el.textContent = d;
         grid.appendChild(el);
     });
@@ -793,26 +702,26 @@ const renderDailyReportCalendar = () => {
         const data = daysData[currentDayStr];
         
         const cell = document.createElement('div');
-        cell.className = "aspect-square rounded-xl border border-white/5 flex flex-col items-center justify-center relative transition-all hover:bg-white/5 cursor-default overflow-hidden group";
+        cell.className = "aspect-square rounded-xl border border-slate-100 flex flex-col items-center justify-center relative transition-all hover:bg-slate-50 cursor-default overflow-hidden group";
         
-        let bgClass = "bg-white/5";
+        let bgClass = "bg-white";
         let badge = "";
         
         if(data) {
             const percent = Math.round((data.completed / data.total) * 100) || 0;
-            if (percent === 100) { bgClass = "bg-gradient-to-br from-yellow-500/20 to-orange-600/20 border-yellow-500/30"; badge = "🏆"; }
-            else if (percent >= 80) { bgClass = "bg-gradient-to-br from-green-500/20 to-emerald-600/20 border-green-500/30"; badge = "⭐"; }
-            else if (percent >= 60) { bgClass = "bg-gradient-to-br from-blue-500/20 to-indigo-600/20 border-blue-500/30"; badge = "📈"; }
-            else if (percent >= 40) { bgClass = "bg-gradient-to-br from-purple-500/20 to-pink-600/20 border-purple-500/30"; badge = "🎯"; }
-            else { bgClass = "bg-red-500/10 border-red-500/30"; badge = "⚠️"; }
+            if (percent === 100) { bgClass = "bg-yellow-50 border-yellow-200"; badge = "🏆"; }
+            else if (percent >= 80) { bgClass = "bg-green-50 border-green-200"; badge = "⭐"; }
+            else if (percent >= 60) { bgClass = "bg-blue-50 border-blue-200"; badge = "📈"; }
+            else if (percent >= 40) { bgClass = "bg-purple-50 border-purple-200"; badge = "🎯"; }
+            else { bgClass = "bg-red-50 border-red-200"; badge = "⚠️"; }
             
             cell.className += ` ${bgClass}`;
         }
 
         cell.innerHTML = `
-            <span class="text-sm font-medium ${data ? 'text-white font-bold' : 'text-gray-600'} relative z-10">${day}</span>
+            <span class="text-sm font-medium ${data ? 'text-slate-800 font-bold' : 'text-slate-400'} relative z-10">${day}</span>
             ${badge ? `<span class="absolute top-1 right-1 text-[10px] z-10">${badge}</span>` : ''}
-            ${data ? `<div class="absolute bottom-0 left-0 h-1 bg-current opacity-50" style="width: ${Math.round((data.completed/data.total)*100)}%; transition: width 0.5s"></div>` : ''}
+            ${data ? `<div class="absolute bottom-0 left-0 h-1 bg-current opacity-30 text-slate-400" style="width: ${Math.round((data.completed/data.total)*100)}%;"></div>` : ''}
         `;
         grid.appendChild(cell);
     }
@@ -823,7 +732,6 @@ const getAggregatedDays = () => {
     const days = {};
     tasks.forEach(task => {
         const date = new Date(task.date);
-        // USE LOCAL STRING HELPER
         const key = getLocalDateStr(date);
         if (!days[key]) days[key] = { total: 0, completed: 0, date: date };
         days[key].total++;
@@ -834,8 +742,8 @@ const getAggregatedDays = () => {
 
 const renderEmptyState = () => {
     DOM.reportContainer.innerHTML = `
-        <div class="flex flex-col items-center justify-center h-64 text-gray-500">
-            <div class="bg-white/5 p-4 rounded-full mb-4"><i data-lucide="bar-chart-2" class="w-8 h-8 text-gray-600"></i></div>
+        <div class="flex flex-col items-center justify-center h-64 text-slate-400">
+            <div class="bg-slate-100 p-4 rounded-full mb-4"><i data-lucide="bar-chart-2" class="w-8 h-8 text-slate-500"></i></div>
             <p>No activity recorded yet.</p>
             <p class="text-sm">Complete tasks to see your stats!</p>
         </div>`;
@@ -851,23 +759,23 @@ const renderReportCard = (label, completed, total) => {
     else { grade = 'D'; colorClass = 'from-red-400 to-red-600'; icon = 'alert-circle'; }
 
     const card = document.createElement('div');
-    card.className = 'glass-panel rounded-2xl p-5 hover:bg-white/10 transition-colors animate-slide-up';
+    card.className = 'glass-panel rounded-2xl p-5 hover:bg-slate-50 transition-colors animate-slide-up bg-white';
     card.innerHTML = `
         <div class="flex justify-between items-start mb-4">
             <div>
-                <h3 class="font-bold text-lg text-white tracking-wide">${label}</h3>
-                <p class="text-xs text-gray-400 mt-1">${completed} / ${total} Goals Completed</p>
+                <h3 class="font-bold text-lg text-slate-800 tracking-wide">${label}</h3>
+                <p class="text-xs text-slate-500 mt-1">${completed} / ${total} Goals Completed</p>
             </div>
             <div class="w-10 h-10 rounded-xl bg-gradient-to-br ${colorClass} flex items-center justify-center text-white font-bold text-xl shadow-lg transform -rotate-6">
                 ${grade}
             </div>
         </div>
-        <div class="relative h-3 bg-gray-700/30 rounded-full overflow-hidden mb-3">
+        <div class="relative h-3 bg-slate-100 rounded-full overflow-hidden mb-3">
             <div class="absolute top-0 left-0 h-full bg-gradient-to-r ${colorClass} transition-all duration-1000" style="width: ${percent}%"></div>
         </div>
         <div class="flex justify-between items-center text-xs font-medium">
-            <span class="text-gray-300">Score: <span class="text-white">${percent}%</span></span>
-            <div class="flex items-center gap-1 text-gray-400">
+            <span class="text-slate-500">Score: <span class="text-slate-900 font-bold">${percent}%</span></span>
+            <div class="flex items-center gap-1 text-slate-500">
                 <i data-lucide="${icon}" class="w-3.5 h-3.5"></i>
                 <span>${grade === 'S' ? 'Perfect!' : grade === 'A' ? 'Excellent' : grade === 'B' ? 'Good' : 'Keep Going'}</span>
             </div>
@@ -876,7 +784,6 @@ const renderReportCard = (label, completed, total) => {
     DOM.reportContainer.appendChild(card);
 };
 
-// --- Main Logic ---
 const updateGreeting = () => {
     const hour = new Date().getHours();
     let greeting = "Hello";
@@ -919,9 +826,7 @@ const showQuote = () => {
     document.getElementById('quoteContent').classList.remove('scale-95');
     document.getElementById('quoteContent').classList.add('scale-100');
     lucide.createIcons();
-    setTimeout(() => {
-       // Auto close is optional, but let's leave manual close
-    }, 4000);
+    setTimeout(() => {}, 4000);
 };
 
 window.closeQuote = () => {
@@ -932,7 +837,7 @@ window.closeQuote = () => {
 
 const updatePriorityBtnUI = () => {
     const config = PRIORITY_CONFIG[currentPriority];
-    DOM.priorityBtn.className = `glass-input px-3 h-12 rounded-xl flex items-center gap-2 min-w-[80px] justify-center group transition-all border flex-1 sm:flex-none bg-white/5 ${config.color.replace('bg-', 'border-').replace('/10', '/50')}`;
+    DOM.priorityBtn.className = `glass-input px-3 h-10 rounded-xl flex items-center gap-2 min-w-[80px] justify-center group transition-all border flex-1 sm:flex-none hover:bg-slate-50 ${config.color.replace('bg-', 'border-').replace('text-', 'text-')}`;
     DOM.priorityLabel.textContent = config.label;
     const icon = DOM.priorityBtn.querySelector('svg');
     if(icon) icon.setAttribute('class', `w-4 h-4 ${config.iconColor}`);
@@ -944,8 +849,9 @@ DOM.priorityBtn.addEventListener('click', () => {
     updatePriorityBtnUI();
 });
 
+// Updated Confetti Colors for Light Theme (No white)
 const triggerConfetti = () => {
-    const colors = ['#a855f7', '#3b82f6', '#ec4899', '#ffffff'];
+    const colors = ['#7c3aed', '#3b82f6', '#ec4899', '#f59e0b', '#10b981'];
     for (let i = 0; i < 100; i++) {
         const p = document.createElement('div');
         p.style.cssText = `position:fixed;left:50%;top:50%;width:8px;height:8px;background:${colors[Math.floor(Math.random()*colors.length)]};border-radius:50%;pointer-events:none;z-index:100`;
@@ -983,7 +889,6 @@ const pad = (n) => n.toString().padStart(2, '0');
 const saveTasks = () => localStorage.setItem('modern-todo-tasks', JSON.stringify(tasks));
 
 const updateUI = () => {
-    // Update Streak regardless of view
     const streak = calculateStreak();
     DOM.streakCount.textContent = streak;
 
@@ -1024,9 +929,9 @@ const updateUI = () => {
     DOM.taskList.innerHTML = '';
     if (currentTasks.length === 0) {
         DOM.taskList.innerHTML = `
-            <div class="h-40 flex flex-col items-center justify-center text-gray-500 animate-slide-up">
-                <div class="bg-white/5 p-4 rounded-full mb-3"><i data-lucide="sparkles" class="w-8 h-8 text-purple-400"></i></div>
-                <p>No goals set for this day.</p>
+            <div class="h-40 flex flex-col items-center justify-center text-slate-400 animate-slide-up">
+                <div class="bg-slate-100 p-4 rounded-full mb-3 shadow-sm"><i data-lucide="sparkles" class="w-8 h-8 text-yellow-500"></i></div>
+                <p class="font-medium text-slate-500">No goals set for this day.</p>
             </div>`;
     } else {
         currentTasks.forEach(task => renderTask(task));
@@ -1037,13 +942,14 @@ const updateUI = () => {
 const renderTask = (task) => {
     const pConfig = PRIORITY_CONFIG[task.priority || 'low'];
     const div = document.createElement('div');
-    div.className = `group glass-panel p-4 rounded-2xl border-l-4 transition-all duration-300 animate-slide-up ${task.completed ? 'border-green-500/50 bg-green-500/5 opacity-60' : pConfig.color.replace('text-', 'border-').replace('300', '400')}`;
+    // Light Theme Task Card Styles
+    div.className = `group glass-panel p-4 rounded-2xl border-l-4 transition-all duration-300 animate-slide-up bg-white ${task.completed ? 'border-l-green-400 bg-green-50/50 opacity-70' : pConfig.color.replace('text-', 'border-l-').replace('bg-', 'border-')}`;
     
     const mainRow = document.createElement('div');
     mainRow.className = "flex items-center gap-3 relative";
     
     const timeHtml = task.dueTime 
-        ? `<div class="flex items-center gap-1 text-[10px] text-gray-400 bg-white/5 px-2 py-0.5 rounded border border-white/5"><i data-lucide="clock" class="w-3 h-3"></i>${formatTimeDisplay(task.dueTime)}</div>` : '';
+        ? `<div class="flex items-center gap-1 text-[10px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200"><i data-lucide="clock" class="w-3 h-3"></i>${formatTimeDisplay(task.dueTime)}</div>` : '';
 
     let timerDisplayHtml = '';
     let timerActive = false;
@@ -1052,33 +958,33 @@ const renderTask = (task) => {
         const remaining = Math.max(0, Math.ceil((task.timerEnd - Date.now()) / 1000));
         const m = Math.floor(remaining / 60);
         const s = remaining % 60;
-        timerDisplayHtml = `<span class="text-[10px] font-mono text-purple-300 bg-purple-500/20 px-2 py-0.5 rounded border border-purple-500/30 animate-pulse ml-2">${pad(m)}:${pad(s)}</span>`;
+        timerDisplayHtml = `<span class="text-[10px] font-mono text-primary bg-purple-100 px-2 py-0.5 rounded border border-purple-200 animate-pulse ml-2">${pad(m)}:${pad(s)}</span>`;
     } else if (task.timerPaused) {
             const remaining = Math.ceil(task.timerPaused / 1000);
             const m = Math.floor(remaining / 60);
             const s = remaining % 60;
-            timerDisplayHtml = `<span class="text-[10px] font-mono text-gray-400 bg-white/5 px-2 py-0.5 rounded ml-2">${pad(m)}:${pad(s)} (Paused)</span>`;
+            timerDisplayHtml = `<span class="text-[10px] font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded ml-2">${pad(m)}:${pad(s)} (Paused)</span>`;
     }
 
     mainRow.innerHTML = `
-        <button onclick="toggleTask('${task.id}')" class="check-btn flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${task.completed ? 'bg-green-500 border-green-500 scale-110' : 'border-gray-500 hover:border-purple-400'}">
+        <button onclick="toggleTask('${task.id}')" class="check-btn flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${task.completed ? 'bg-green-500 border-green-500 scale-110 shadow-sm' : 'border-slate-300 hover:border-primary bg-white'}">
             ${task.completed ? '<i data-lucide="check" class="w-3.5 h-3.5 text-white" stroke-width="4"></i>' : ''}
         </button>
         
         <div class="flex-1 min-w-0 cursor-pointer" onclick="toggleTimerPanel('${task.id}')">
             <div class="flex items-center gap-2 mb-1 flex-wrap">
-                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded border ${pConfig.color.replace('text-', 'text-').replace('300', '400')} ${pConfig.color.replace('text-', 'border-').replace('300', '500/30')} bg-white/5">${pConfig.label}</span>
+                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded border ${pConfig.color}">${pConfig.label}</span>
                 ${timeHtml}
                 ${timerDisplayHtml}
             </div>
-            <div class="text-sm font-medium truncate transition-all duration-300 ${task.completed ? 'text-gray-500 line-through' : 'text-gray-200'} md:text-base">${escapeHtml(task.text)}</div>
+            <div class="text-sm font-medium truncate transition-all duration-300 ${task.completed ? 'text-slate-400 line-through' : 'text-slate-800'} md:text-base">${escapeHtml(task.text)}</div>
         </div>
 
         <div class="flex items-center gap-1">
-            <button onclick="toggleTimerPanel('${task.id}')" class="p-2 text-gray-400 hover:text-purple-300 hover:bg-white/5 rounded-lg transition-colors" title="Focus Timer">
+            <button onclick="toggleTimerPanel('${task.id}')" class="p-2 text-slate-400 hover:text-primary hover:bg-slate-100 rounded-lg transition-colors" title="Focus Timer">
                 <i data-lucide="timer" class="w-4 h-4"></i>
             </button>
-            <button onclick="deleteTask('${task.id}')" class="p-2 text-gray-400 hover:text-red-400 hover:bg-white/5 rounded-lg transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100">
+            <button onclick="deleteTask('${task.id}')" class="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100">
                 <i data-lucide="trash-2" class="w-4 h-4"></i>
             </button>
         </div>
@@ -1087,7 +993,7 @@ const renderTask = (task) => {
 
     if (expandedTimerId === task.id) {
         const timerPanel = document.createElement('div');
-        timerPanel.className = "mt-3 pt-3 border-t border-white/10 animate-slide-up";
+        timerPanel.className = "mt-3 pt-3 border-t border-slate-100 animate-slide-up";
         
         const isRunning = !!task.timerEnd;
         const remainingMs = isRunning ? task.timerEnd - Date.now() : (task.timerPaused || (task.defaultTimerDuration || 0));
@@ -1098,16 +1004,16 @@ const renderTask = (task) => {
                 const s = remainingSecs % 60;
                 
                 timerPanel.innerHTML = `
-                <div class="flex items-center justify-between bg-black/20 rounded-lg p-2">
-                    <div class="text-2xl font-mono font-bold text-white tracking-wider ml-2">
+                <div class="flex items-center justify-between bg-slate-50 rounded-lg p-2 border border-slate-200">
+                    <div class="text-2xl font-mono font-bold text-slate-800 tracking-wider ml-2">
                         ${pad(m)}:${pad(s)}
                     </div>
                     <div class="flex gap-2">
                         ${isRunning 
-                            ? `<button onclick="pauseTimer('${task.id}')" class="p-2 bg-yellow-500/20 text-yellow-300 rounded-lg hover:bg-yellow-500/30"><i data-lucide="pause" class="w-4 h-4"></i></button>`
-                            : `<button onclick="resumeTimer('${task.id}')" class="p-2 bg-green-500/20 text-green-300 rounded-lg hover:bg-green-500/30"><i data-lucide="play" class="w-4 h-4"></i></button>`
+                            ? `<button onclick="pauseTimer('${task.id}')" class="p-2 bg-yellow-100 text-yellow-600 rounded-lg hover:bg-yellow-200"><i data-lucide="pause" class="w-4 h-4"></i></button>`
+                            : `<button onclick="resumeTimer('${task.id}')" class="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200"><i data-lucide="play" class="w-4 h-4"></i></button>`
                         }
-                        <button onclick="stopTimer('${task.id}')" class="p-2 bg-red-500/20 text-red-300 rounded-lg hover:bg-red-500/30"><i data-lucide="square" class="w-4 h-4"></i></button>
+                        <button onclick="stopTimer('${task.id}')" class="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200"><i data-lucide="square" class="w-4 h-4"></i></button>
                     </div>
                 </div>
                 `;
@@ -1117,19 +1023,19 @@ const renderTask = (task) => {
             
             timerPanel.innerHTML = `
                 <div class="flex items-center gap-2">
-                    <div class="flex-1 flex items-center bg-white/5 rounded-lg border border-white/10 p-1">
-                        <input type="number" id="t-min-${task.id}" value="${pad(defMin)}" min="0" max="999" class="bg-transparent w-full text-center focus:outline-none text-sm text-white" placeholder="Min">
-                        <span class="text-gray-500 text-xs">:</span>
-                        <input type="number" id="t-sec-${task.id}" value="${pad(defSec)}" min="0" max="59" class="bg-transparent w-full text-center focus:outline-none text-sm text-white" placeholder="Sec">
+                    <div class="flex-1 flex items-center bg-white rounded-lg border border-slate-200 p-1 shadow-sm">
+                        <input type="number" id="t-min-${task.id}" value="${pad(defMin)}" min="0" max="999" class="bg-transparent w-full text-center focus:outline-none text-sm text-slate-800" placeholder="Min">
+                        <span class="text-slate-400 text-xs">:</span>
+                        <input type="number" id="t-sec-${task.id}" value="${pad(defSec)}" min="0" max="59" class="bg-transparent w-full text-center focus:outline-none text-sm text-slate-800" placeholder="Sec">
                     </div>
-                    <button onclick="startTimer('${task.id}')" class="px-4 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-sm font-medium rounded-lg shadow-lg shadow-purple-600/20 transition-colors">
+                    <button onclick="startTimer('${task.id}')" class="px-4 py-1.5 bg-primary hover:bg-primary-dark text-white text-sm font-medium rounded-lg shadow-md shadow-primary/20 transition-colors">
                         Start
                     </button>
                 </div>
                 <div class="flex gap-2 mt-2 justify-center">
-                        <button onclick="quickSetTimer('${task.id}', 5)" class="text-[10px] px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-gray-400 transition-colors">+5m</button>
-                        <button onclick="quickSetTimer('${task.id}', 10)" class="text-[10px] px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-gray-400 transition-colors">+10m</button>
-                        <button onclick="quickSetTimer('${task.id}', 25)" class="text-[10px] px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-gray-400 transition-colors">+25m</button>
+                        <button onclick="quickSetTimer('${task.id}', 5)" class="text-[10px] px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-500 transition-colors">+5m</button>
+                        <button onclick="quickSetTimer('${task.id}', 10)" class="text-[10px] px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-500 transition-colors">+10m</button>
+                        <button onclick="quickSetTimer('${task.id}', 25)" class="text-[10px] px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-500 transition-colors">+25m</button>
                 </div>
             `;
         }
@@ -1153,8 +1059,6 @@ window.toggleTask = (id) => {
         if(t.completed) { 
             triggerConfetti(); 
             
-            // Check if all tasks for today are now completed
-            // Use Local Date check for accuracy
             const nowStr = getLocalDateStr(new Date());
             const tasksToday = tasks.filter(task => {
                 const d = new Date(task.date);
@@ -1231,9 +1135,6 @@ const addTask = (e) => {
     const text = DOM.taskInput.value.trim();
     if (!text) return;
 
-    // FIX: Use current date string format matching our streak logic
-    // This ensures "Today" is consistent regardless of timezone
-    
     tasks.push({
         id: crypto.randomUUID(),
         text: text,
@@ -1241,7 +1142,6 @@ const addTask = (e) => {
         dueTime: DOM.timeInput.value,
         completed: false,
         notified: false,
-        // IMPORTANT: Save full ISO for sorting, but Streak logic will parse it locally
         date: currentDate.toISOString(), 
         createdAt: new Date().toISOString()
     });
@@ -1277,17 +1177,17 @@ setInterval(() => {
         }
     });
     
-    // Simple check: only re-render if valid timer running and input not focused
     if (uiNeedsUpdate && isDailyView && document.activeElement.tagName !== 'INPUT') updateUI();
 }, 1000);
 
 const addToast = (msg, type = 'info') => {
     const el = document.createElement('div');
-    const color = type === 'success' ? 'text-green-400' : 'text-blue-400';
-    const border = type === 'success' ? 'border-green-500/50' : 'border-blue-500/50';
+    const color = type === 'success' ? 'text-green-600' : 'text-blue-600';
+    const bg = type === 'success' ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200';
     const icon = type === 'success' ? 'check-circle' : 'info';
-    el.className = `glass-panel border ${border} backdrop-blur-md text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 animate-slide-up pointer-events-auto`;
-    el.innerHTML = `<i data-lucide="${icon}" class="w-4 h-4 ${color}"></i><span class="text-sm font-medium">${msg}</span>`;
+    // Light Theme Toast
+    el.className = `glass-panel border ${bg} backdrop-blur-md px-4 py-3 rounded-xl shadow-lg flex items-center gap-3 animate-slide-up pointer-events-auto`;
+    el.innerHTML = `<i data-lucide="${icon}" class="w-4 h-4 ${color}"></i><span class="text-sm font-medium text-slate-800">${msg}</span>`;
     DOM.toastContainer.appendChild(el);
     lucide.createIcons();
     setTimeout(() => {
@@ -1318,11 +1218,11 @@ DOM.notifBtn.addEventListener('click', async () => {
 
 const updateNotifIcon = () => {
     if (notifPermission === 'granted') { 
-        DOM.notifBtn.classList.replace('text-gray-400', 'text-green-400'); 
-        DOM.notifBtn.classList.add('shadow-[0_0_10px_rgba(74,222,128,0.3)]');
+        DOM.notifBtn.classList.replace('text-slate-400', 'text-green-500'); 
+        DOM.notifBtn.classList.add('shadow-[0_0_10px_rgba(34,197,94,0.3)]');
     } else {
-        DOM.notifBtn.classList.replace('text-green-400', 'text-gray-400');
-        DOM.notifBtn.classList.remove('shadow-[0_0_10px_rgba(74,222,128,0.3)]');
+        DOM.notifBtn.classList.replace('text-green-500', 'text-slate-400');
+        DOM.notifBtn.classList.remove('shadow-[0_0_10px_rgba(34,197,94,0.3)]');
     }
 }
 
