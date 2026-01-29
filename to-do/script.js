@@ -1,0 +1,1337 @@
+// --- State ---
+let tasks = JSON.parse(localStorage.getItem('modern-todo-tasks')) || [];
+let userName = localStorage.getItem('modern-todo-username') || 'User';
+let currentDate = new Date();
+let notifPermission = typeof Notification !== 'undefined' ? Notification.permission : 'default';
+let expandedTimerId = null;
+let currentPriority = 'low';
+let isDailyView = true;
+let insightType = 'monthly'; 
+let dailyViewMode = 'list'; 
+let calendarViewDate = new Date(); 
+
+// Graph State
+let chartInstance = null;
+let currentGraphDate = new Date(); // Represents the end date of the week being viewed
+
+// Streak View State
+let streakViewDate = new Date();
+
+const priorities = ['low', 'medium', 'high'];
+const motivationalQuotes = [
+    "The only way to do great work is to love what you do.",
+    "Believe you can and you're halfway there.",
+    "Your limitation it's only your imagination.",
+    "Push yourself, because no one else is going to do it for you.",
+    "Great things never come from comfort zones.",
+    "Success doesn't just find you. You have to go out and get it.",
+    "The harder you work for something, the greater you'll feel when you achieve it.",
+    "Don't stop when you're tired. Stop when you're done.",
+    "Little things make big days.",
+    "Dream bigger. Do bigger."
+];
+
+const PRIORITY_CONFIG = {
+    high: { label: 'High', color: 'text-red-300 bg-red-500/10 border-red-500/20', iconColor: 'text-red-400' },
+    medium: { label: 'Med', color: 'text-amber-300 bg-amber-500/10 border-amber-500/20', iconColor: 'text-amber-400' },
+    low: { label: 'Low', color: 'text-blue-300 bg-blue-500/10 border-blue-500/20', iconColor: 'text-blue-400' }
+};
+
+// --- DOM Cache ---
+const DOM = {
+    dailyView: document.getElementById('dailyView'),
+    monthlyView: document.getElementById('monthlyView'),
+    dailyHeaderContent: document.getElementById('dailyHeaderContent'),
+    pageTitle: document.getElementById('pageTitle'),
+    appIcon: document.getElementById('appIcon'),
+    reportBtn: document.getElementById('reportBtn'),
+    reportContainer: document.getElementById('reportContainer'),
+    btnMonthly: document.getElementById('btnMonthly'),
+    btnDaily: document.getElementById('btnDaily'),
+    dailyViewToggles: document.getElementById('dailyViewToggles'),
+    btnListMode: document.getElementById('btnListMode'),
+    btnCalendarMode: document.getElementById('btnCalendarMode'),
+    dateDisplay: document.getElementById('dateDisplay'),
+    dateLabel: document.getElementById('dateLabel'),
+    datePicker: document.getElementById('datePicker'),
+    todayBtn: document.getElementById('todayBtn'),
+    progressBar: document.getElementById('progressBar'),
+    progressPercent: document.getElementById('progressPercent'),
+    progressText: document.getElementById('progressText'),
+    taskList: document.getElementById('taskList'),
+    taskInput: document.getElementById('taskInput'),
+    priorityBtn: document.getElementById('priorityBtn'),
+    priorityLabel: document.getElementById('priorityLabel'),
+    timeInput: document.getElementById('timeInput'),
+    addBtn: document.getElementById('addBtn'),
+    form: document.getElementById('addTaskForm'),
+    toastContainer: document.getElementById('toastContainer'),
+    notifBtn: document.getElementById('notifBtn'),
+    timeGreeting: document.getElementById('timeGreeting'),
+    userNameDisplay: document.getElementById('userNameDisplay'),
+    userNameInput: document.getElementById('userNameInput'),
+    quoteOverlay: document.getElementById('quoteOverlay'),
+    quoteText: document.getElementById('quoteText'),
+    inputContainer: document.getElementById('inputContainer'),
+    streakCount: document.getElementById('streakCount'),
+    graphContainer: document.getElementById('graphMainWrapper'),
+    streakPopup: document.getElementById('streakPopup'),
+    streakPopupContent: document.getElementById('streakPopupContent'),
+    weeklyStreakGrid: document.getElementById('weeklyStreakGrid'),
+    streakPopupCount: document.getElementById('streakPopupCount'),
+    streakDateRange: document.getElementById('streakDateRange'),
+    // Stats
+    statAvgScore: document.getElementById('statAvgScore'),
+    statBestDay: document.getElementById('statBestDay'),
+    statMomentum: document.getElementById('statMomentum'),
+    graphDateRange: document.getElementById('graphDateRange'),
+    pdfModal: document.getElementById('pdfModal'),
+    pdfModalContent: document.getElementById('pdfModalContent')
+};
+
+// --- HELPER: Local Date String to fix Timezone Bug ---
+const getLocalDateStr = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
+// --- STREAK LOGIC (FIXED) ---
+const isDayComplete = (dateStr) => {
+    // Check based on 'YYYY-MM-DD' prefix match
+    const dayTasks = tasks.filter(t => t.date.startsWith(dateStr));
+    
+    if (dayTasks.length === 0) return 'empty'; // Distinguish empty
+    return dayTasks.every(t => t.completed) ? 'complete' : 'incomplete';
+};
+
+const calculateStreak = () => {
+    // Get unique dates based on LOCAL strings
+    const uniqueDates = new Set(tasks.map(t => {
+        // If the stored date is ISO with time, this converts it to local YYYY-MM-DD
+        return getLocalDateStr(new Date(t.date));
+    }));
+
+    if (uniqueDates.size === 0) return 0;
+
+    let streak = 0;
+    let checkDate = new Date(); // Starts Now
+    
+    // Check "Today" first
+    let checkStr = getLocalDateStr(checkDate);
+    let status = isDayComplete(checkStr);
+
+    // Grace Period Logic:
+    // If today is complete -> Add to streak
+    // If today is incomplete/empty -> Do not add, do not break. Just check yesterday.
+    if (status === 'complete') {
+        streak++;
+    }
+    
+    // Move to yesterday
+    checkDate.setDate(checkDate.getDate() - 1);
+
+    // Loop backwards
+    while (true) {
+        checkStr = getLocalDateStr(checkDate);
+        status = isDayComplete(checkStr);
+
+        if (status === 'complete') {
+            streak++;
+        } else if (status === 'incomplete') {
+            // Task exists but not done -> Streak broken
+            break;
+        } else if (status === 'empty') {
+            // Break on empty days (Strict Mode)
+            break; 
+        }
+
+        checkDate.setDate(checkDate.getDate() - 1);
+        
+        // Safety break
+        if (streak > 3650) break; 
+    }
+    
+    return streak;
+};
+
+window.openStreakPopup = () => {
+    streakViewDate = new Date(); // Reset to today
+    showStreakPopup();
+};
+
+window.changeStreakWeek = (offset) => {
+    streakViewDate.setDate(streakViewDate.getDate() + (offset * 7));
+    showStreakPopup();
+};
+
+const showStreakPopup = () => {
+    const streak = calculateStreak();
+    DOM.streakPopupCount.textContent = `Current Streak: ${streak} Day${streak !== 1 ? 's' : ''}`;
+    DOM.weeklyStreakGrid.innerHTML = '';
+    
+    // Calculate week range based on streakViewDate aligned to MONDAY
+    const dayOfWeek = streakViewDate.getDay(); // 0 is Sunday
+    // Adjust to make Monday index 0, Sunday index 6
+    const monIndex = (dayOfWeek + 6) % 7;
+    
+    const startOfWeek = new Date(streakViewDate);
+    startOfWeek.setDate(streakViewDate.getDate() - monIndex); 
+    
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+
+    // Update Range Label
+    const rangeStr = `${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric'}).format(startOfWeek)} - ${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric'}).format(endOfWeek)}`;
+    DOM.streakDateRange.textContent = rangeStr;
+
+    const today = new Date();
+    const todayStr = getLocalDateStr(today);
+
+    // Updated status checker using Local Time logic
+    const getDayStatus = (d) => {
+        const dStr = getLocalDateStr(d);
+        return isDayComplete(dStr);
+    };
+
+    // MONDAY to SUNDAY labels
+    const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+    for (let i = 0; i < 7; i++) {
+        const currentDay = new Date(startOfWeek);
+        currentDay.setDate(startOfWeek.getDate() + i);
+        const currentDayStr = getLocalDateStr(currentDay);
+        
+        const status = getDayStatus(currentDay);
+        const isToday = currentDayStr === todayStr;
+        const isFuture = currentDay > today && !isToday;
+
+        const el = document.createElement('div');
+        el.className = "flex flex-col items-center gap-2 min-w-[30px]"; // Added min-w for responsiveness
+        
+        let iconHtml = '';
+        if (isFuture) {
+            iconHtml = `<div class="w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-gray-600 border-dashed"></div>`;
+        } else if (status === 'complete') {
+            iconHtml = `<div class="w-8 h-8 rounded-full bg-orange-500/20 border border-orange-500/50 flex items-center justify-center text-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]"><i data-lucide="flame" class="w-4 h-4 fill-orange-500"></i></div>`;
+        } else if (status === 'incomplete') {
+                // Incomplete task logic
+                iconHtml = `<div class="w-8 h-8 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-500"><i data-lucide="x" class="w-4 h-4"></i></div>`;
+        } else if (isToday) {
+            // Today pending
+            iconHtml = `<div class="w-8 h-8 rounded-full bg-purple-500/20 border border-purple-500/50 flex items-center justify-center text-purple-400 animate-pulse"><i data-lucide="circle" class="w-4 h-4"></i></div>`;
+        } else {
+            // Empty/Missed
+            iconHtml = `<div class="w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-gray-500"><i data-lucide="minus" class="w-4 h-4"></i></div>`;
+        }
+
+        el.innerHTML = `
+            <span class="text-[10px] font-bold ${isToday ? 'text-purple-400' : 'text-gray-400'} font-mono">${days[i]}</span>
+            ${iconHtml}
+        `;
+        DOM.weeklyStreakGrid.appendChild(el);
+    }
+
+    DOM.streakPopup.classList.remove('opacity-0', 'pointer-events-none');
+    DOM.streakPopupContent.classList.remove('scale-95');
+    DOM.streakPopupContent.classList.add('scale-100');
+    lucide.createIcons();
+};
+
+window.closeStreakPopup = () => {
+    DOM.streakPopup.classList.add('opacity-0', 'pointer-events-none');
+    DOM.streakPopupContent.classList.add('scale-95');
+    DOM.streakPopupContent.classList.remove('scale-100');
+};
+
+// --- PDF Modal Logic ---
+window.openPdfModal = () => {
+    DOM.pdfModal.classList.remove('opacity-0', 'pointer-events-none');
+    DOM.pdfModalContent.classList.remove('scale-95');
+    DOM.pdfModalContent.classList.add('scale-100');
+};
+
+window.closePdfModal = () => {
+    DOM.pdfModal.classList.add('opacity-0', 'pointer-events-none');
+    DOM.pdfModalContent.classList.add('scale-95');
+    DOM.pdfModalContent.classList.remove('scale-100');
+};
+
+// --- PDF Generation Logic ---
+window.generatePDF = (type) => {
+    closePdfModal();
+    const element = document.createElement('div');
+    element.style.width = '780px'; 
+    element.style.padding = '40px';
+    element.style.fontFamily = "'Inter', sans-serif";
+    element.style.backgroundColor = '#ffffff';
+    element.style.color = '#1f2937';
+
+    const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    let contentHtml = '';
+    let reportTitle = '';
+
+    // Common Header
+    const headerHtml = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; border-bottom: 3px solid #7c3aed; padding-bottom: 20px;">
+            <div>
+                <h1 style="font-size: 32px; font-weight: 800; color: #111827; margin: 0; letter-spacing: -0.5px;">Goal <span style="color: #7c3aed;">Sync</span></h1>
+                <p style="color: #6b7280; margin: 5px 0 0 0; font-size: 14px; font-weight: 500;">Performance Report for <span style="color: #111827; font-weight: 700;">${userName}</span></p>
+            </div>
+            <div style="text-align: right;">
+                <p style="color: #9ca3af; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin: 0;">Generated on</p>
+                <p style="color: #111827; font-weight: 600; font-size: 14px; margin: 2px 0 0 0;">${dateStr}</p>
+            </div>
+        </div>
+    `;
+
+    // --- Type 1: Monthly Daily List (Updated from Monthly List) ---
+    if (type === 'list') {
+        reportTitle = 'Daily Breakdown Report';
+        let rowsHtml = '';
+        // Use Daily Data instead of Monthly Aggregation
+        const days = getAggregatedDays();
+        const sortedKeys = Object.keys(days).sort().reverse();
+        
+        sortedKeys.forEach(key => {
+            const data = days[key];
+            const dateObj = data.date;
+            const dateLabel = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).format(dateObj);
+            const percent = Math.round((data.completed / data.total) * 100) || 0;
+            
+            let color = '#ef4444';
+            let badgeIcon = '⚠️';
+            let grade = 'D';
+            let bg = '#fee2e2';
+
+            if (percent === 100) { color = '#ca8a04'; badgeIcon = '🏆'; grade = 'S'; bg = '#fef9c3'; }
+            else if (percent >= 80) { color = '#059669'; badgeIcon = '⭐'; grade = 'A'; bg = '#d1fae5'; }
+            else if (percent >= 60) { color = '#2563eb'; badgeIcon = '📈'; grade = 'B'; bg = '#dbeafe'; }
+            else if (percent >= 40) { color = '#9333ea'; badgeIcon = '🎯'; grade = 'C'; bg = '#f3e8ff'; }
+
+            rowsHtml += `
+                <div style="display: flex; align-items: center; background: #ffffff; border: 1px solid #f3f4f6; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.02);">
+                    
+                    <div style="width: 60px; text-align: center; margin-right: 20px;">
+                        <div style="font-weight: 800; font-size: 24px; color: ${color}; line-height: 1;">${grade}</div>
+                        <div style="font-size: 10px; font-weight: 600; color: #9ca3af; margin-top: 4px;">GRADE</div>
+                    </div>
+
+                    <div style="flex: 1; border-left: 2px solid #f3f4f6; padding-left: 20px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                            <h3 style="font-size: 15px; font-weight: 700; color: #1f2937; margin: 0;">${dateLabel}</h3>
+                            <div style="font-size: 14px; font-weight: 600; color: ${color}; display: flex; align-items: center; gap: 6px;">
+                                <span>${badgeIcon}</span> <span>${percent}%</span>
+                            </div>
+                        </div>
+                        <div style="width: 100%; background: #f3f4f6; height: 8px; border-radius: 99px; overflow: hidden;">
+                            <div style="width: ${percent}%; background: ${color}; height: 100%;"></div>
+                        </div>
+                        <div style="margin-top: 6px; font-size: 11px; color: #6b7280; font-weight: 500;">
+                            ${data.completed} out of ${data.total} tasks completed
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        if(!rowsHtml) rowsHtml = '<div style="padding: 40px; text-align: center; color: #6b7280; background: #f9fafb; border-radius: 12px;">No activity data found.</div>';
+        
+        contentHtml = `
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
+                <div style="width: 4px; height: 24px; background: #7c3aed; border-radius: 2px;"></div>
+                <h2 style="font-size: 20px; font-weight: 700; color: #111827; margin: 0;">${reportTitle}</h2>
+            </div>
+            <div style="background: #fafafa; border-radius: 16px; padding: 20px;">
+                ${rowsHtml}
+            </div>
+        `;
+    }
+
+    // --- Type 2: Visual Calendar (Updated with Icons) ---
+    else if (type === 'calendar') {
+        reportTitle = 'Visual Calendar View';
+        
+        const year = calendarViewDate.getFullYear();
+        const month = calendarViewDate.getMonth();
+        const monthName = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(calendarViewDate);
+        
+        let gridHtml = `
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                <h2 style="font-size: 24px; font-weight: 800; color: #111827; margin: 0;">${monthName}</h2>
+                <div style="font-size: 12px; color: #6b7280; background: #f3f4f6; padding: 6px 12px; border-radius: 20px;">Monthly Overview</div>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-bottom: 20px;">`;
+        
+        // Header Days
+        ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(d => {
+            gridHtml += `<div style="text-align: center; font-size: 11px; font-weight: 700; color: #9ca3af; padding: 8px; text-transform: uppercase; letter-spacing: 0.5px;">${d}</div>`;
+        });
+
+        const daysData = getAggregatedDays();
+        const firstDay = new Date(year, month, 1);
+        const lastDay = new Date(year, month + 1, 0);
+        const daysInMonth = lastDay.getDate();
+        const startDayIdx = firstDay.getDay();
+
+        for(let i=0; i<startDayIdx; i++) { gridHtml += `<div></div>`; }
+
+        for(let day=1; day<=daysInMonth; day++) {
+            const currentDayStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+            const data = daysData[currentDayStr];
+            let bg = "#f9fafb";
+            let border = "#e5e7eb";
+            let textCol = "#d1d5db";
+            let icon = "";
+            let contentColor = "#9ca3af";
+            
+            if(data) {
+                const percent = Math.round((data.completed / data.total) * 100) || 0;
+                textCol = "#ffffff";
+                if (percent === 100) { bg = "#eab308"; border = "#ca8a04"; icon = "🏆"; contentColor="#ffffff"; }
+                else if (percent >= 80) { bg = "#10b981"; border = "#059669"; icon = "⭐"; contentColor="#ffffff"; }
+                else if (percent >= 60) { bg = "#3b82f6"; border = "#2563eb"; icon = "📈"; contentColor="#ffffff"; }
+                else if (percent >= 40) { bg = "#a855f7"; border = "#9333ea"; icon = "🎯"; contentColor="#ffffff"; }
+                else { bg = "#ef4444"; border = "#dc2626"; icon = "⚠️"; contentColor="#ffffff"; }
+            } else {
+                // Empty days logic
+                textCol = "#1f2937";
+            }
+
+            gridHtml += `
+                <div style="aspect-ratio: 1; background-color: ${bg}; border: 1px solid ${border}; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; height: 80px;">
+                    <span style="font-size: 14px; font-weight: 700; color: ${data ? '#fff' : '#374151'}; margin-bottom: 4px;">${day}</span>
+                    ${icon ? `<span style="font-size: 18px;">${icon}</span>` : ''}
+                </div>
+            `;
+        }
+        gridHtml += `</div>
+        <div style="display: flex; justify-content: center; gap: 15px; margin-top: 10px;">
+            <div style="display: flex; align-items: center; gap: 5px; font-size: 10px; color: #6b7280;"><span style="color: #eab308">🏆</span> Perfect</div>
+            <div style="display: flex; align-items: center; gap: 5px; font-size: 10px; color: #6b7280;"><span style="color: #10b981">⭐</span> Excellent</div>
+            <div style="display: flex; align-items: center; gap: 5px; font-size: 10px; color: #6b7280;"><span style="color: #3b82f6">📈</span> Good</div>
+            <div style="display: flex; align-items: center; gap: 5px; font-size: 10px; color: #6b7280;"><span style="color: #ef4444">⚠️</span> Needs Work</div>
+        </div>
+        `;
+        contentHtml = `${gridHtml}`;
+    }
+
+    // --- Type 3: Graph ---
+    else if (type === 'graph') {
+        reportTitle = 'Weekly Trend Analysis';
+        // Convert Chart to Base64 Image
+        const canvas = document.getElementById('progressChart');
+        // We create a temporary high-res version or just use current
+        const chartImg = canvas.toDataURL('image/png', 1.0);
+        
+        contentHtml = `
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
+                <div style="width: 4px; height: 24px; background: #ec4899; border-radius: 2px;"></div>
+                <h2 style="font-size: 20px; font-weight: 700; color: #111827; margin: 0;">${reportTitle}</h2>
+            </div>
+            <div style="border: 1px solid #e5e7eb; border-radius: 16px; padding: 24px; background: #fafafa; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
+                <p style="text-align:center; font-size: 14px; color: #6b7280; font-weight: 600; margin-bottom: 25px; text-transform: uppercase; letter-spacing: 1px;">
+                    Week of ${DOM.graphDateRange.textContent}
+                </p>
+                <img src="${chartImg}" style="width: 100%; height: auto; border-radius: 8px; border: 1px solid #f3f4f6;" />
+            </div>
+            <div style="margin-top: 25px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px;">
+                <div style="background: #f3f4f6; padding: 20px; border-radius: 12px; text-align: center;">
+                    <div style="font-size: 11px; text-transform: uppercase; color: #6b7280; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 5px;">Average</div>
+                    <div style="font-size: 28px; font-weight: 800; color: #111827;">${DOM.statAvgScore.textContent}</div>
+                </div>
+                <div style="background: #f3f4f6; padding: 20px; border-radius: 12px; text-align: center;">
+                     <div style="font-size: 11px; text-transform: uppercase; color: #6b7280; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 5px;">Best Day</div>
+                     <div style="font-size: 20px; font-weight: 800; color: #8b5cf6;">${DOM.statBestDay.textContent}</div>
+                </div>
+                 <div style="background: #f3f4f6; padding: 20px; border-radius: 12px; text-align: center;">
+                     <div style="font-size: 11px; text-transform: uppercase; color: #6b7280; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 5px;">Status</div>
+                     <div style="font-size: 20px; font-weight: 800; color: #10b981;">Active</div>
+                </div>
+            </div>
+        `;
+    }
+
+    element.innerHTML = `
+        ${headerHtml}
+        ${contentHtml}
+        <div style="margin-top: 40px; text-align: center; border-top: 1px solid #f3f4f6; padding-top: 20px;">
+            <p style="color: #9ca3af; font-size: 12px; font-weight: 500;">Generated by Goal Sync App</p>
+        </div>
+    `;
+
+    const opt = {
+        margin: 10,
+        filename: `goals-report-${type}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    addToast('Generating PDF...', 'info');
+    html2pdf().set(opt).from(element).save().then(() => {
+        addToast('PDF Downloaded!', 'success');
+    }).catch(err => {
+        console.error(err);
+        addToast('Failed to generate PDF.', 'error');
+    });
+};
+
+// --- Chart Logic ---
+window.changeGraphWeek = (offset) => {
+    currentGraphDate.setDate(currentGraphDate.getDate() + (offset * 7));
+    renderChart();
+};
+
+const renderChart = () => {
+    const ctx = document.getElementById('progressChart').getContext('2d');
+    
+    // Destroy existing chart
+    if (chartInstance) {
+        chartInstance.destroy();
+    }
+
+    // --- 1. Prepare Data based on Calendar Week (Mon-Sun) ---
+    const daysData = getAggregatedDays();
+    const labels = [];
+    const dataPoints = [];
+    const rawData = []; 
+    
+    // Calculate the Monday of the week relative to currentGraphDate
+    const currentDay = currentGraphDate.getDay(); // 0 (Sun) to 6 (Sat)
+    // If it's Sunday (0), we go back 6 days to get Monday. Otherwise we go back (day - 1)
+    const distanceToMonday = currentDay === 0 ? 6 : currentDay - 1;
+    
+    const startOfWeek = new Date(currentGraphDate);
+    startOfWeek.setDate(currentGraphDate.getDate() - distanceToMonday);
+    
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    
+    // Format range text for the header
+    const rangeStr = `${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric'}).format(startOfWeek)} - ${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric'}).format(endOfWeek)}`;
+    DOM.graphDateRange.textContent = rangeStr;
+
+    // Loop from Monday (0) to Sunday (6)
+    for(let i=0; i<7; i++) { 
+        const d = new Date(startOfWeek);
+        d.setDate(startOfWeek.getDate() + i);
+        
+        // Construct Key for lookup - USE LOCAL STRING HELPER
+        const key = getLocalDateStr(d);
+        
+        const dayName = new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(d);
+        labels.push(dayName);
+        
+        const dayStat = daysData[key];
+        if(dayStat && dayStat.total > 0) {
+            const pct = Math.round((dayStat.completed / dayStat.total) * 100);
+            dataPoints.push(pct);
+            rawData.push({ completed: dayStat.completed, total: dayStat.total, date: d });
+        } else {
+            dataPoints.push(0);
+            rawData.push({ completed: 0, total: 0, date: d });
+        }
+    }
+
+    // --- 2. Calculate Dashboard Stats ---
+    const nonZeroDays = dataPoints.filter(p => p > 0);
+    const totalScore = dataPoints.reduce((a, b) => a + b, 0);
+    const avg = nonZeroDays.length ? Math.round(totalScore / nonZeroDays.length) : 0;
+    DOM.statAvgScore.textContent = `${avg}%`;
+    DOM.statAvgScore.className = `font-mono text-xl font-bold ${avg >= 80 ? 'text-green-400' : avg >= 50 ? 'text-blue-400' : 'text-white'}`;
+
+    const maxScore = Math.max(...dataPoints);
+    const bestIndex = dataPoints.lastIndexOf(maxScore);
+    if (maxScore > 0) {
+        const bestDate = rawData[bestIndex].date;
+        DOM.statBestDay.textContent = new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(bestDate);
+        DOM.statBestDay.className = "font-display text-sm font-bold text-purple-300";
+    } else {
+        DOM.statBestDay.textContent = "-";
+        DOM.statBestDay.className = "font-display text-sm font-bold text-gray-500";
+    }
+
+    // Momentum (First 3 vs Last 3 in this week view)
+    const first3 = dataPoints.slice(0,3).reduce((a,b)=>a+b,0)/3;
+    const last3 = dataPoints.slice(4).reduce((a,b)=>a+b,0)/3;
+    
+    let trendIcon = '→';
+    let trendColor = 'text-gray-400';
+    // Only show trend if there is data
+    if(totalScore > 0) {
+        if (last3 > first3 + 5) { trendIcon = '↗'; trendColor = 'text-green-400'; }
+        else if (last3 < first3 - 5) { trendIcon = '↘'; trendColor = 'text-red-400'; }
+    }
+    DOM.statMomentum.innerHTML = `<span class="${trendColor} text-lg">${trendIcon}</span>`;
+
+    // --- 3. Style (Colored Graph - Purple/Blue Gradient) ---
+    const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+    gradient.addColorStop(0, 'rgba(139, 92, 246, 0.5)'); // Purple top
+    gradient.addColorStop(1, 'rgba(59, 130, 246, 0.0)'); // Transparent bottom
+
+    // --- 4. Chart Construction ---
+    chartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Completion',
+                data: dataPoints,
+                borderWidth: 3,
+                borderColor: '#8b5cf6', // Solid Purple Line (No Red)
+                backgroundColor: gradient, // Gradient Fill
+                fill: true, // Enable Fill
+                tension: 0.4, // Smooth Curves
+                pointBackgroundColor: '#18181b', 
+                pointBorderColor: '#8b5cf6', 
+                pointBorderWidth: 2,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                pointHoverBorderWidth: 2,
+                pointHoverBorderColor: '#fff',
+                pointHoverBackgroundColor: '#8b5cf6'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(20, 20, 25, 0.95)',
+                    titleColor: '#fff',
+                    titleFont: { family: "'Outfit', sans-serif", size: 13 },
+                    bodyColor: '#e2e8f0',
+                    bodyFont: { family: "'Inter', sans-serif", size: 12 },
+                    borderColor: 'rgba(255,255,255,0.1)',
+                    borderWidth: 1,
+                    padding: 12,
+                    cornerRadius: 12,
+                    displayColors: false,
+                    callbacks: {
+                        label: function(context) {
+                            const val = context.parsed.y;
+                            const idx = context.dataIndex;
+                            const raw = rawData[idx];
+                            return [
+                                `Score: ${val}%`,
+                                `Completed: ${raw.completed}/${raw.total}`
+                            ];
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 105, 
+                    grid: { color: 'rgba(255, 255, 255, 0.03)' },
+                    ticks: { display: false } 
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { 
+                        color: '#a1a1aa', 
+                        font: { size: 11, family: "'JetBrains Mono', monospace" } 
+                    }
+                }
+            }
+        }
+    });
+};
+
+// --- View Switching ---
+window.toggleView = () => {
+    isDailyView = !isDailyView;
+    if (isDailyView) {
+        DOM.dailyView.classList.remove('hidden-view');
+        DOM.monthlyView.classList.add('hidden-view');
+        DOM.inputContainer.classList.remove('hidden-view');
+        DOM.pageTitle.innerHTML = `Goal <span class="text-purple-500">Sync</span>`;
+        DOM.reportBtn.innerHTML = '<i data-lucide="bar-chart-2" class="w-4 h-4"></i><span>Insights</span>';
+        DOM.appIcon.innerHTML = '<i data-lucide="trophy" class="w-8 h-8 text-purple-400"></i>';
+        updateUI();
+    } else {
+        DOM.dailyView.classList.add('hidden-view');
+        DOM.monthlyView.classList.remove('hidden-view');
+        DOM.inputContainer.classList.add('hidden-view');
+        DOM.pageTitle.innerHTML = `Insights`;
+        DOM.reportBtn.innerHTML = '<i data-lucide="layout-list" class="w-4 h-4"></i><span>Tasks</span>'; 
+        DOM.appIcon.innerHTML = '<i data-lucide="pie-chart" class="w-8 h-8 text-pink-400"></i>';
+        updateInsightsUI();
+    }
+    lucide.createIcons();
+};
+
+window.setInsightType = (type) => {
+    insightType = type;
+    updateInsightsUI();
+};
+
+window.setDailyMode = (mode) => {
+    dailyViewMode = mode;
+    updateInsightsUI();
+};
+
+const updateInsightsUI = () => {
+    // Render the graph always in insights view
+    setTimeout(renderChart, 100);
+
+    if(insightType === 'monthly') {
+        DOM.btnMonthly.className = "px-4 py-2 rounded-lg text-sm font-medium transition-all bg-white/10 text-white shadow-sm";
+        DOM.btnDaily.className = "px-4 py-2 rounded-lg text-sm font-medium transition-all text-gray-400 hover:text-white";
+        DOM.dailyViewToggles.classList.add('hidden');
+        // SHOW GRAPH on Monthly View
+        DOM.graphContainer.classList.remove('hidden');
+        renderMonthlyReport();
+    } else {
+        DOM.btnMonthly.className = "px-4 py-2 rounded-lg text-sm font-medium transition-all text-gray-400 hover:text-white";
+        DOM.btnDaily.className = "px-4 py-2 rounded-lg text-sm font-medium transition-all bg-white/10 text-white shadow";
+        DOM.dailyViewToggles.classList.remove('hidden');
+        DOM.dailyViewToggles.classList.add('flex');
+        
+        // HIDE GRAPH on Daily View
+        DOM.graphContainer.classList.add('hidden');
+        
+        if(dailyViewMode === 'list') {
+            DOM.btnListMode.className = "p-2 rounded-lg transition-all bg-white/10 text-white shadow";
+            DOM.btnCalendarMode.className = "p-2 rounded-lg transition-all text-gray-400 hover:text-white";
+            renderDailyReportList();
+        } else {
+            DOM.btnListMode.className = "p-2 rounded-lg transition-all text-gray-400 hover:text-white";
+            DOM.btnCalendarMode.className = "p-2 rounded-lg transition-all bg-white/10 text-white shadow";
+            renderDailyReportCalendar();
+        }
+    }
+    lucide.createIcons();
+};
+
+const renderMonthlyReport = () => {
+    DOM.reportContainer.innerHTML = '';
+    const months = {};
+    tasks.forEach(task => {
+        const date = new Date(task.date);
+        // Use Local Time for Month Grouping too
+        const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        if (!months[key]) months[key] = { total: 0, completed: 0, date: date };
+        months[key].total++;
+        if (task.completed) months[key].completed++;
+    });
+
+    const sortedKeys = Object.keys(months).sort().reverse();
+    if (sortedKeys.length === 0) return renderEmptyState();
+
+    sortedKeys.forEach(key => {
+        const data = months[key];
+        const label = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(data.date);
+        renderReportCard(label, data.completed, data.total);
+    });
+};
+
+const renderDailyReportList = () => {
+    DOM.reportContainer.innerHTML = '';
+    const days = getAggregatedDays();
+    const sortedKeys = Object.keys(days).sort().reverse();
+    if (sortedKeys.length === 0) return renderEmptyState();
+    sortedKeys.forEach(key => {
+        const data = days[key];
+        const label = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }).format(data.date);
+        renderReportCard(label, data.completed, data.total);
+    });
+};
+
+window.changeCalendarMonth = (offset) => {
+    calendarViewDate.setMonth(calendarViewDate.getMonth() + offset);
+    renderDailyReportCalendar();
+    lucide.createIcons();
+};
+
+const renderDailyReportCalendar = () => {
+    DOM.reportContainer.innerHTML = '';
+    const year = calendarViewDate.getFullYear();
+    const month = calendarViewDate.getMonth();
+    
+    const header = document.createElement('div');
+    header.className = "flex justify-between items-center mb-4 bg-white/5 p-3 rounded-xl border border-white/5";
+    const monthName = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(calendarViewDate);
+    header.innerHTML = `
+        <button onclick="changeCalendarMonth(-1)" class="p-2 hover:bg-white/10 rounded-lg transition-colors"><i data-lucide="chevron-left" class="w-5 h-5 text-gray-300"></i></button>
+        <span class="text-lg font-bold text-white">${monthName}</span>
+        <button onclick="changeCalendarMonth(1)" class="p-2 hover:bg-white/10 rounded-lg transition-colors"><i data-lucide="chevron-right" class="w-5 h-5 text-gray-300"></i></button>
+    `;
+    DOM.reportContainer.appendChild(header);
+
+    const grid = document.createElement('div');
+    grid.className = "grid grid-cols-7 gap-2";
+    
+    ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(d => {
+        const el = document.createElement('div');
+        el.className = "text-center text-xs text-gray-500 font-medium py-2 uppercase tracking-wider";
+        el.textContent = d;
+        grid.appendChild(el);
+    });
+
+    const daysData = getAggregatedDays();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startDayIdx = firstDay.getDay();
+
+    for(let i=0; i<startDayIdx; i++) {
+        const el = document.createElement('div');
+        grid.appendChild(el);
+    }
+
+    for(let day=1; day<=daysInMonth; day++) {
+        const currentDayStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+        const data = daysData[currentDayStr];
+        
+        const cell = document.createElement('div');
+        cell.className = "aspect-square rounded-xl border border-white/5 flex flex-col items-center justify-center relative transition-all hover:bg-white/5 cursor-default overflow-hidden group";
+        
+        let bgClass = "bg-white/5";
+        let badge = "";
+        
+        if(data) {
+            const percent = Math.round((data.completed / data.total) * 100) || 0;
+            if (percent === 100) { bgClass = "bg-gradient-to-br from-yellow-500/20 to-orange-600/20 border-yellow-500/30"; badge = "🏆"; }
+            else if (percent >= 80) { bgClass = "bg-gradient-to-br from-green-500/20 to-emerald-600/20 border-green-500/30"; badge = "⭐"; }
+            else if (percent >= 60) { bgClass = "bg-gradient-to-br from-blue-500/20 to-indigo-600/20 border-blue-500/30"; badge = "📈"; }
+            else if (percent >= 40) { bgClass = "bg-gradient-to-br from-purple-500/20 to-pink-600/20 border-purple-500/30"; badge = "🎯"; }
+            else { bgClass = "bg-red-500/10 border-red-500/30"; badge = "⚠️"; }
+            
+            cell.className += ` ${bgClass}`;
+        }
+
+        cell.innerHTML = `
+            <span class="text-sm font-medium ${data ? 'text-white font-bold' : 'text-gray-600'} relative z-10">${day}</span>
+            ${badge ? `<span class="absolute top-1 right-1 text-[10px] z-10">${badge}</span>` : ''}
+            ${data ? `<div class="absolute bottom-0 left-0 h-1 bg-current opacity-50" style="width: ${Math.round((data.completed/data.total)*100)}%; transition: width 0.5s"></div>` : ''}
+        `;
+        grid.appendChild(cell);
+    }
+    DOM.reportContainer.appendChild(grid);
+};
+
+const getAggregatedDays = () => {
+    const days = {};
+    tasks.forEach(task => {
+        const date = new Date(task.date);
+        // USE LOCAL STRING HELPER
+        const key = getLocalDateStr(date);
+        if (!days[key]) days[key] = { total: 0, completed: 0, date: date };
+        days[key].total++;
+        if (task.completed) days[key].completed++;
+    });
+    return days;
+};
+
+const renderEmptyState = () => {
+    DOM.reportContainer.innerHTML = `
+        <div class="flex flex-col items-center justify-center h-64 text-gray-500">
+            <div class="bg-white/5 p-4 rounded-full mb-4"><i data-lucide="bar-chart-2" class="w-8 h-8 text-gray-600"></i></div>
+            <p>No activity recorded yet.</p>
+            <p class="text-sm">Complete tasks to see your stats!</p>
+        </div>`;
+};
+
+const renderReportCard = (label, completed, total) => {
+    const percent = Math.round((completed / total) * 100) || 0;
+    let grade, colorClass, icon;
+    if (percent === 100) { grade = 'S'; colorClass = 'from-yellow-400 to-orange-500'; icon = 'trophy'; }
+    else if (percent >= 80) { grade = 'A'; colorClass = 'from-green-400 to-emerald-600'; icon = 'star'; }
+    else if (percent >= 60) { grade = 'B'; colorClass = 'from-blue-400 to-indigo-600'; icon = 'trending-up'; }
+    else if (percent >= 40) { grade = 'C'; colorClass = 'from-purple-400 to-pink-600'; icon = 'target'; }
+    else { grade = 'D'; colorClass = 'from-red-400 to-red-600'; icon = 'alert-circle'; }
+
+    const card = document.createElement('div');
+    card.className = 'glass-panel rounded-2xl p-5 hover:bg-white/10 transition-colors animate-slide-up';
+    card.innerHTML = `
+        <div class="flex justify-between items-start mb-4">
+            <div>
+                <h3 class="font-bold text-lg text-white tracking-wide">${label}</h3>
+                <p class="text-xs text-gray-400 mt-1">${completed} / ${total} Goals Completed</p>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-br ${colorClass} flex items-center justify-center text-white font-bold text-xl shadow-lg transform -rotate-6">
+                ${grade}
+            </div>
+        </div>
+        <div class="relative h-3 bg-gray-700/30 rounded-full overflow-hidden mb-3">
+            <div class="absolute top-0 left-0 h-full bg-gradient-to-r ${colorClass} transition-all duration-1000" style="width: ${percent}%"></div>
+        </div>
+        <div class="flex justify-between items-center text-xs font-medium">
+            <span class="text-gray-300">Score: <span class="text-white">${percent}%</span></span>
+            <div class="flex items-center gap-1 text-gray-400">
+                <i data-lucide="${icon}" class="w-3.5 h-3.5"></i>
+                <span>${grade === 'S' ? 'Perfect!' : grade === 'A' ? 'Excellent' : grade === 'B' ? 'Good' : 'Keep Going'}</span>
+            </div>
+        </div>
+    `;
+    DOM.reportContainer.appendChild(card);
+};
+
+// --- Main Logic ---
+const updateGreeting = () => {
+    const hour = new Date().getHours();
+    let greeting = "Hello";
+    if (hour >= 5 && hour < 12) greeting = "Good Morning";
+    else if (hour >= 12 && hour < 18) greeting = "Good Afternoon";
+    else greeting = "Good Evening";
+    DOM.timeGreeting.textContent = greeting;
+    DOM.userNameDisplay.textContent = userName;
+};
+
+window.editName = () => {
+    DOM.userNameDisplay.classList.add('hidden');
+    DOM.userNameInput.classList.remove('hidden');
+    DOM.userNameInput.value = userName;
+    DOM.userNameInput.focus();
+};
+
+window.saveName = () => {
+    const newName = DOM.userNameInput.value.trim();
+    if (newName) {
+        userName = newName;
+        localStorage.setItem('modern-todo-username', userName);
+    }
+    DOM.userNameInput.classList.add('hidden');
+    DOM.userNameDisplay.classList.remove('hidden');
+    updateGreeting();
+};
+
+window.handleNameKey = (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        DOM.userNameInput.blur();
+    }
+};
+
+const showQuote = () => {
+    const randomQuote = motivationalQuotes[Math.floor(Math.random() * motivationalQuotes.length)];
+    DOM.quoteText.textContent = `"${randomQuote}"`;
+    DOM.quoteOverlay.classList.remove('opacity-0', 'pointer-events-none');
+    document.getElementById('quoteContent').classList.remove('scale-95');
+    document.getElementById('quoteContent').classList.add('scale-100');
+    lucide.createIcons();
+    setTimeout(() => {
+       // Auto close is optional, but let's leave manual close
+    }, 4000);
+};
+
+window.closeQuote = () => {
+    document.getElementById('quoteOverlay').classList.add('opacity-0', 'pointer-events-none');
+    document.getElementById('quoteContent').classList.add('scale-95');
+    document.getElementById('quoteContent').classList.remove('scale-100');
+};
+
+const updatePriorityBtnUI = () => {
+    const config = PRIORITY_CONFIG[currentPriority];
+    DOM.priorityBtn.className = `glass-input px-3 h-12 rounded-xl flex items-center gap-2 min-w-[80px] justify-center group transition-all border flex-1 sm:flex-none bg-white/5 ${config.color.replace('bg-', 'border-').replace('/10', '/50')}`;
+    DOM.priorityLabel.textContent = config.label;
+    const icon = DOM.priorityBtn.querySelector('svg');
+    if(icon) icon.setAttribute('class', `w-4 h-4 ${config.iconColor}`);
+};
+
+DOM.priorityBtn.addEventListener('click', () => {
+    const currentIndex = priorities.indexOf(currentPriority);
+    currentPriority = priorities[(currentIndex + 1) % priorities.length];
+    updatePriorityBtnUI();
+});
+
+const triggerConfetti = () => {
+    const colors = ['#a855f7', '#3b82f6', '#ec4899', '#ffffff'];
+    for (let i = 0; i < 100; i++) {
+        const p = document.createElement('div');
+        p.style.cssText = `position:fixed;left:50%;top:50%;width:8px;height:8px;background:${colors[Math.floor(Math.random()*colors.length)]};border-radius:50%;pointer-events:none;z-index:100`;
+        document.body.appendChild(p);
+        const angle = Math.random() * Math.PI * 2;
+        const velocity = Math.random() * 200 + 50;
+        const anim = p.animate([
+            { transform: 'translate(0,0) scale(1)', opacity: 1 },
+            { transform: `translate(${Math.cos(angle)*velocity}px, ${Math.sin(angle)*velocity}px) scale(0)`, opacity: 0 }
+        ], { duration: 1000, easing: 'cubic-bezier(0, .9, .57, 1)' });
+        anim.onfinish = () => p.remove();
+    }
+};
+
+const formatDate = (date) => new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).format(date);
+const formatTimeDisplay = (timeStr) => {
+    if (!timeStr) return '';
+    const [hours, minutes] = timeStr.split(':');
+    const h = parseInt(hours, 10);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    return `${h % 12 || 12}:${minutes} ${ampm}`;
+};
+const isSameDay = (d1, d2) => d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
+const getRelativeLabel = (date) => {
+    const today = new Date();
+    const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+    const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+    if (isSameDay(date, today)) return 'Today';
+    if (isSameDay(date, yesterday)) return 'Yesterday';
+    if (isSameDay(date, tomorrow)) return 'Tomorrow';
+    return '';
+};
+const pad = (n) => n.toString().padStart(2, '0');
+
+const saveTasks = () => localStorage.setItem('modern-todo-tasks', JSON.stringify(tasks));
+
+const updateUI = () => {
+    // Update Streak regardless of view
+    const streak = calculateStreak();
+    DOM.streakCount.textContent = streak;
+
+    if (!isDailyView) return;
+    
+    updateGreeting(); 
+    DOM.dateDisplay.textContent = formatDate(currentDate);
+    const label = getRelativeLabel(currentDate);
+    DOM.dateLabel.textContent = label || "Date";
+    DOM.todayBtn.classList.toggle('hidden', label === 'Today');
+    
+    if (window.innerWidth >= 768) {
+            DOM.todayBtn.classList.toggle('hidden', isSameDay(currentDate, new Date()));
+            DOM.todayBtn.classList.toggle('md:block', !isSameDay(currentDate, new Date()));
+    }
+    
+    const year = currentDate.getFullYear();
+    const month = pad(currentDate.getMonth() + 1);
+    const day = pad(currentDate.getDate());
+    DOM.datePicker.value = `${year}-${month}-${day}`;
+    
+    const currentTasks = tasks.filter(t => isSameDay(new Date(t.date), currentDate));
+    const priorityOrder = { high: 3, medium: 2, low: 1 };
+    currentTasks.sort((a, b) => {
+        if (a.completed !== b.completed) return a.completed ? 1 : -1;
+        const pA = priorityOrder[a.priority || 'low'];
+        const pB = priorityOrder[b.priority || 'low'];
+        return pB - pA || new Date(a.createdAt) - new Date(b.createdAt);
+    });
+    
+    const total = currentTasks.length;
+    const completed = currentTasks.filter(t => t.completed).length;
+    const progress = total === 0 ? 0 : Math.round((completed / total) * 100);
+    DOM.progressBar.style.width = `${progress}%`;
+    DOM.progressPercent.textContent = `${progress}%`;
+    DOM.progressText.textContent = `${completed}/${total} goals completed`;
+
+    DOM.taskList.innerHTML = '';
+    if (currentTasks.length === 0) {
+        DOM.taskList.innerHTML = `
+            <div class="h-40 flex flex-col items-center justify-center text-gray-500 animate-slide-up">
+                <div class="bg-white/5 p-4 rounded-full mb-3"><i data-lucide="sparkles" class="w-8 h-8 text-purple-400"></i></div>
+                <p>No goals set for this day.</p>
+            </div>`;
+    } else {
+        currentTasks.forEach(task => renderTask(task));
+    }
+    lucide.createIcons();
+};
+
+const renderTask = (task) => {
+    const pConfig = PRIORITY_CONFIG[task.priority || 'low'];
+    const div = document.createElement('div');
+    div.className = `group glass-panel p-4 rounded-2xl border-l-4 transition-all duration-300 animate-slide-up ${task.completed ? 'border-green-500/50 bg-green-500/5 opacity-60' : pConfig.color.replace('text-', 'border-').replace('300', '400')}`;
+    
+    const mainRow = document.createElement('div');
+    mainRow.className = "flex items-center gap-3 relative";
+    
+    const timeHtml = task.dueTime 
+        ? `<div class="flex items-center gap-1 text-[10px] text-gray-400 bg-white/5 px-2 py-0.5 rounded border border-white/5"><i data-lucide="clock" class="w-3 h-3"></i>${formatTimeDisplay(task.dueTime)}</div>` : '';
+
+    let timerDisplayHtml = '';
+    let timerActive = false;
+    if (task.timerEnd) {
+        timerActive = true;
+        const remaining = Math.max(0, Math.ceil((task.timerEnd - Date.now()) / 1000));
+        const m = Math.floor(remaining / 60);
+        const s = remaining % 60;
+        timerDisplayHtml = `<span class="text-[10px] font-mono text-purple-300 bg-purple-500/20 px-2 py-0.5 rounded border border-purple-500/30 animate-pulse ml-2">${pad(m)}:${pad(s)}</span>`;
+    } else if (task.timerPaused) {
+            const remaining = Math.ceil(task.timerPaused / 1000);
+            const m = Math.floor(remaining / 60);
+            const s = remaining % 60;
+            timerDisplayHtml = `<span class="text-[10px] font-mono text-gray-400 bg-white/5 px-2 py-0.5 rounded ml-2">${pad(m)}:${pad(s)} (Paused)</span>`;
+    }
+
+    mainRow.innerHTML = `
+        <button onclick="toggleTask('${task.id}')" class="check-btn flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${task.completed ? 'bg-green-500 border-green-500 scale-110' : 'border-gray-500 hover:border-purple-400'}">
+            ${task.completed ? '<i data-lucide="check" class="w-3.5 h-3.5 text-white" stroke-width="4"></i>' : ''}
+        </button>
+        
+        <div class="flex-1 min-w-0 cursor-pointer" onclick="toggleTimerPanel('${task.id}')">
+            <div class="flex items-center gap-2 mb-1 flex-wrap">
+                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded border ${pConfig.color.replace('text-', 'text-').replace('300', '400')} ${pConfig.color.replace('text-', 'border-').replace('300', '500/30')} bg-white/5">${pConfig.label}</span>
+                ${timeHtml}
+                ${timerDisplayHtml}
+            </div>
+            <div class="text-sm font-medium truncate transition-all duration-300 ${task.completed ? 'text-gray-500 line-through' : 'text-gray-200'} md:text-base">${escapeHtml(task.text)}</div>
+        </div>
+
+        <div class="flex items-center gap-1">
+            <button onclick="toggleTimerPanel('${task.id}')" class="p-2 text-gray-400 hover:text-purple-300 hover:bg-white/5 rounded-lg transition-colors" title="Focus Timer">
+                <i data-lucide="timer" class="w-4 h-4"></i>
+            </button>
+            <button onclick="deleteTask('${task.id}')" class="p-2 text-gray-400 hover:text-red-400 hover:bg-white/5 rounded-lg transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
+        </div>
+    `;
+    div.appendChild(mainRow);
+
+    if (expandedTimerId === task.id) {
+        const timerPanel = document.createElement('div');
+        timerPanel.className = "mt-3 pt-3 border-t border-white/10 animate-slide-up";
+        
+        const isRunning = !!task.timerEnd;
+        const remainingMs = isRunning ? task.timerEnd - Date.now() : (task.timerPaused || (task.defaultTimerDuration || 0));
+        const remainingSecs = Math.max(0, Math.ceil(remainingMs / 1000));
+        
+        if (isRunning || task.timerPaused) {
+                const m = Math.floor(remainingSecs / 60);
+                const s = remainingSecs % 60;
+                
+                timerPanel.innerHTML = `
+                <div class="flex items-center justify-between bg-black/20 rounded-lg p-2">
+                    <div class="text-2xl font-mono font-bold text-white tracking-wider ml-2">
+                        ${pad(m)}:${pad(s)}
+                    </div>
+                    <div class="flex gap-2">
+                        ${isRunning 
+                            ? `<button onclick="pauseTimer('${task.id}')" class="p-2 bg-yellow-500/20 text-yellow-300 rounded-lg hover:bg-yellow-500/30"><i data-lucide="pause" class="w-4 h-4"></i></button>`
+                            : `<button onclick="resumeTimer('${task.id}')" class="p-2 bg-green-500/20 text-green-300 rounded-lg hover:bg-green-500/30"><i data-lucide="play" class="w-4 h-4"></i></button>`
+                        }
+                        <button onclick="stopTimer('${task.id}')" class="p-2 bg-red-500/20 text-red-300 rounded-lg hover:bg-red-500/30"><i data-lucide="square" class="w-4 h-4"></i></button>
+                    </div>
+                </div>
+                `;
+        } else {
+            const defMin = Math.floor((task.defaultTimerDuration || 1500000) / 60000); 
+            const defSec = Math.floor(((task.defaultTimerDuration || 1500000) % 60000) / 1000);
+            
+            timerPanel.innerHTML = `
+                <div class="flex items-center gap-2">
+                    <div class="flex-1 flex items-center bg-white/5 rounded-lg border border-white/10 p-1">
+                        <input type="number" id="t-min-${task.id}" value="${pad(defMin)}" min="0" max="999" class="bg-transparent w-full text-center focus:outline-none text-sm text-white" placeholder="Min">
+                        <span class="text-gray-500 text-xs">:</span>
+                        <input type="number" id="t-sec-${task.id}" value="${pad(defSec)}" min="0" max="59" class="bg-transparent w-full text-center focus:outline-none text-sm text-white" placeholder="Sec">
+                    </div>
+                    <button onclick="startTimer('${task.id}')" class="px-4 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-sm font-medium rounded-lg shadow-lg shadow-purple-600/20 transition-colors">
+                        Start
+                    </button>
+                </div>
+                <div class="flex gap-2 mt-2 justify-center">
+                        <button onclick="quickSetTimer('${task.id}', 5)" class="text-[10px] px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-gray-400 transition-colors">+5m</button>
+                        <button onclick="quickSetTimer('${task.id}', 10)" class="text-[10px] px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-gray-400 transition-colors">+10m</button>
+                        <button onclick="quickSetTimer('${task.id}', 25)" class="text-[10px] px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-gray-400 transition-colors">+25m</button>
+                </div>
+            `;
+        }
+        div.appendChild(timerPanel);
+    }
+    
+    DOM.taskList.appendChild(div);
+};
+
+const escapeHtml = (unsafe) => unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+
+window.openCalendar = () => { try { DOM.datePicker.showPicker(); } catch (e) { DOM.datePicker.click(); } };
+window.changeDate = (d) => { currentDate.setDate(currentDate.getDate() + d); currentDate = new Date(currentDate); updateUI(); };
+DOM.datePicker.addEventListener('change', (e) => { if(e.target.value) { const p=e.target.value.split('-'); currentDate = new Date(p[0], p[1]-1, p[2]); updateUI(); } });
+window.goToToday = () => { currentDate = new Date(); updateUI(); };
+
+window.toggleTask = (id) => {
+    const t = tasks.find(x => x.id === id);
+    if(t) { 
+        t.completed = !t.completed; 
+        if(t.completed) { 
+            triggerConfetti(); 
+            
+            // Check if all tasks for today are now completed
+            // Use Local Date check for accuracy
+            const nowStr = getLocalDateStr(new Date());
+            const tasksToday = tasks.filter(task => {
+                const d = new Date(task.date);
+                return getLocalDateStr(d) === nowStr;
+            });
+            
+            const allDone = tasksToday.length > 0 && tasksToday.every(task => task.completed);
+            
+            if (allDone && isSameDay(new Date(t.date), new Date())) {
+                showStreakPopup();
+            } else {
+                showQuote();
+            }
+
+            sendNotification('Goal Completed! 🎉', `You completed: ${t.text}`);
+        } 
+        saveTasks(); 
+        updateUI(); 
+    }
+};
+window.deleteTask = (id) => { tasks = tasks.filter(t => t.id !== id); saveTasks(); updateUI(); };
+
+window.toggleTimerPanel = (id) => { expandedTimerId = expandedTimerId === id ? null : id; updateUI(); };
+
+window.startTimer = (id) => {
+    const min = parseInt(document.getElementById(`t-min-${id}`).value) || 0;
+    const sec = parseInt(document.getElementById(`t-sec-${id}`).value) || 0;
+    const duration = (min * 60 + sec) * 1000;
+    if (duration <= 0) return;
+
+    const task = tasks.find(t => t.id === id);
+    task.defaultTimerDuration = duration; 
+    task.timerEnd = Date.now() + duration;
+    task.timerPaused = null;
+    saveTasks();
+    updateUI();
+};
+
+window.pauseTimer = (id) => {
+    const task = tasks.find(t => t.id === id);
+    if (task.timerEnd) {
+        task.timerPaused = Math.max(0, task.timerEnd - Date.now());
+        task.timerEnd = null;
+        saveTasks();
+        updateUI();
+    }
+};
+
+window.resumeTimer = (id) => {
+    const task = tasks.find(t => t.id === id);
+    if (task.timerPaused) {
+        task.timerEnd = Date.now() + task.timerPaused;
+        task.timerPaused = null;
+        saveTasks();
+        updateUI();
+    }
+};
+
+window.stopTimer = (id) => {
+    const task = tasks.find(t => t.id === id);
+    task.timerEnd = null;
+    task.timerPaused = null;
+    saveTasks();
+    updateUI();
+};
+
+window.quickSetTimer = (id, mins) => {
+        document.getElementById(`t-min-${id}`).value = pad(mins);
+        document.getElementById(`t-sec-${id}`).value = "00";
+};
+
+const addTask = (e) => {
+    e.preventDefault();
+    const text = DOM.taskInput.value.trim();
+    if (!text) return;
+
+    // FIX: Use current date string format matching our streak logic
+    // This ensures "Today" is consistent regardless of timezone
+    
+    tasks.push({
+        id: crypto.randomUUID(),
+        text: text,
+        priority: currentPriority, 
+        dueTime: DOM.timeInput.value,
+        completed: false,
+        notified: false,
+        // IMPORTANT: Save full ISO for sorting, but Streak logic will parse it locally
+        date: currentDate.toISOString(), 
+        createdAt: new Date().toISOString()
+    });
+    DOM.taskInput.value = ''; DOM.timeInput.value = '';
+    saveTasks(); updateUI(); addToast('Goal added successfully', 'success');
+};
+
+// --- Background Loop (1s) ---
+setInterval(() => {
+    const now = new Date();
+    const nowMs = Date.now();
+    let uiNeedsUpdate = false;
+
+    tasks.forEach(t => {
+        if (!t.completed && t.dueTime && !t.notified) {
+            const d = new Date(t.date);
+            if (isSameDay(d, now) && now.toTimeString().slice(0,5) >= t.dueTime) {
+                sendNotification("Time's Up! ⏰", `Deadline for "${t.text}" reached!`);
+                t.notified = true;
+                saveTasks();
+            }
+        }
+
+        if (t.timerEnd) {
+            uiNeedsUpdate = true; 
+            if (nowMs >= t.timerEnd) {
+                t.timerEnd = null;
+                t.timerPaused = null;
+                sendNotification("Timer Finished! ⌛️", `Time is up for goal: "${t.text}"`);
+                triggerConfetti(); 
+                saveTasks();
+            }
+        }
+    });
+    
+    // Simple check: only re-render if valid timer running and input not focused
+    if (uiNeedsUpdate && isDailyView && document.activeElement.tagName !== 'INPUT') updateUI();
+}, 1000);
+
+const addToast = (msg, type = 'info') => {
+    const el = document.createElement('div');
+    const color = type === 'success' ? 'text-green-400' : 'text-blue-400';
+    const border = type === 'success' ? 'border-green-500/50' : 'border-blue-500/50';
+    const icon = type === 'success' ? 'check-circle' : 'info';
+    el.className = `glass-panel border ${border} backdrop-blur-md text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 animate-slide-up pointer-events-auto`;
+    el.innerHTML = `<i data-lucide="${icon}" class="w-4 h-4 ${color}"></i><span class="text-sm font-medium">${msg}</span>`;
+    DOM.toastContainer.appendChild(el);
+    lucide.createIcons();
+    setTimeout(() => {
+        el.style.opacity = '0';
+        setTimeout(() => el.remove(), 300);
+    }, 3000);
+};
+
+const sendNotification = (title, body) => {
+    addToast(body);
+    if (notifPermission === 'granted') new Notification(title, { body, icon: 'https://cdn-icons-png.flaticon.com/512/1486/1486433.png' });
+};
+
+DOM.notifBtn.addEventListener('click', async () => {
+    if (typeof Notification !== 'undefined') {
+        const p = await Notification.requestPermission();
+        notifPermission = p;
+        updateNotifIcon();
+        if (p === 'granted') { 
+            addToast('Notifications enabled!', 'success'); 
+        } else {
+            addToast('Notifications denied.', 'error');
+        }
+    } else {
+        addToast('Not supported in this browser', 'error');
+    }
+});
+
+const updateNotifIcon = () => {
+    if (notifPermission === 'granted') { 
+        DOM.notifBtn.classList.replace('text-gray-400', 'text-green-400'); 
+        DOM.notifBtn.classList.add('shadow-[0_0_10px_rgba(74,222,128,0.3)]');
+    } else {
+        DOM.notifBtn.classList.replace('text-green-400', 'text-gray-400');
+        DOM.notifBtn.classList.remove('shadow-[0_0_10px_rgba(74,222,128,0.3)]');
+    }
+}
+
+DOM.form.addEventListener('submit', addTask);
+DOM.taskInput.addEventListener('input', (e) => {
+    const hasText = e.target.value.trim().length > 0;
+    DOM.addBtn.disabled = !hasText;
+    if(hasText) DOM.addBtn.classList.remove('opacity-50', 'cursor-not-allowed'); else DOM.addBtn.classList.add('opacity-50', 'cursor-not-allowed');
+});
+
+updateNotifIcon();
+updateUI();
